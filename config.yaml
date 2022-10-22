@@ -1,0 +1,30 @@
+
+general:
+  db_name: test.db
+  game_to_run: lqr
+
+games:
+  robots:
+    seed: 100
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 500
+    playing_agents:
+      -PPOtest
+    environment:
+      grid_size: [10,10]
+
+  lqr:
+    gym_params:
+      id: LqrEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:LqrEnv
+      max_episode_steps: 500
+
+agents:
+  robots:
+    PPOtest:
+      name : PPOtest
+
+
+
