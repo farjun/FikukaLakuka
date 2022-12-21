@@ -1,82 +1,53 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
 import gym
-from ray.tune.registry import register_env
+import fikuka_lakuka
 
-from fikuka_lakuka.agents import AgentFactory
-from config import config
-from ray.rllib.algorithms.ppo import PPO
+def run_one_episode(env, verbose=False):
+    env.reset()
+    sum_reward = 0
 
-def play_round(env, agents, state):
-    agent_names = config.get_in_game_context("agents")
-    agents_rewards = dict(zip(agent_names, [0]*len(agent_names)))
+    for i in range(env.MAX_STEPS):
+        action = env.action_space.sample()
 
-    for agent_name in agent_names:
-        agent_class = agents[agent_name]
-        action, _states = agent_class.predict(state)
-        state, rewards, done, info = env.step(action)
-        agents_rewards[agent_name] += rewards
+        if verbose:
+            print("action:", action)
 
-        env.render()
+        state, reward, done, info = env.step(action)
+        sum_reward += reward
 
+        if verbose:
+            env.render()
 
-        if done == 1:
-            # report at the end of each episode
-            print("cumulative reward", agents_rewards)
-            state = env.reset()
-            return state, rewards
+        if done:
+            if verbose:
+                print("done @ step {}".format(i))
+
+            break
+
+    if verbose:
+        print("cumulative reward", sum_reward)
+
+    return sum_reward
+
 
 def main():
-    gym.envs.register(
-        **config.get_in_game_context("gym_params")
-    )
-    env = gym.make(config.get_in_game_context("gym_params", "id"))
-    agent_factory = AgentFactory()
-    agents = agent_factory.make_agents(config.get_in_game_context("agents"), env=env, verbose=True)
-    n_turns =10
-    obs, info = env.reset(seed=config.get_in_game_context("seed"), return_info=True)
+    # first, create the custom environment and run it for one episode
+    env = gym.make("robots-v0")
+    sum_reward = run_one_episode(env, verbose=True)
 
-    for i in range(n_turns):
-        play_round(env, agents, obs)
+    # next, calculate a baseline of rewards based on random actions
+    # (no policy)
+    history = []
+
+    for _ in range(10000):
+        sum_reward = run_one_episode(env, verbose=False)
+        history.append(sum_reward)
+
+    avg_sum_reward = sum(history) / len(history)
+    print("\nbaseline cumulative reward: {:6.2}".format(avg_sum_reward))
 
 
-def run_atari_example():
-    config = {
-        # Environment (RLlib understands openAI gym registered strings).
-        "env": "Taxi-v3",
-        # Use 2 environment workers (aka "rollout workers") that parallelly
-        # collect samples from their own environment clone(s).
-        "num_workers": 2,
-        # Change this to "framework: torch", if you are using PyTorch.
-        # Also, use "framework: tf2" for tf2.x eager execution.
-        "framework": "tf",
-        # Tweak the default model provided automatically by RLlib,
-        # given the environment's observation- and action spaces.
-        "model": {
-            "fcnet_hiddens": [64, 64],
-            "fcnet_activation": "relu",
-        },
-        # Set up a separate evaluation worker set for the
-        # `algo.evaluate()` call after training (see below).
-        "evaluation_num_workers": 1,
-        # Only for evaluation runs, render the env.
-        "evaluation_config": {
-            "render_env": True,
-        },
-    }
-
-    # Create our RLlib Trainer.
-    algo = PPO(config=config)
-
-    # Run it for n training iterations. A training iteration includes
-    # parallel sample collection by the environment workers as well as
-    # loss calculation on the collected batch and a model update.
-    for _ in range(3):
-        print(algo.train())
-
-    # Evaluate the trained Trainer (and render each timestep to the shell's
-    # output).
-    algo.evaluate()
-
-if __name__ == '__main__':
-    print("STARTED RUNNING")
-    # main()
-    run_atari_example()
+if __name__ == "__main__":
+    main()

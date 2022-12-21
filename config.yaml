@@ -1,7 +1,7 @@
 
 general:
   db_name: test.db
-  game_to_run: lqr
+  game_to_run: robots
 
 games:
   robots:
@@ -11,20 +11,19 @@ games:
       entry_point: fikuka_lakuka.gym.envs:RobotsEnv
       max_episode_steps: 500
     playing_agents:
-      -PPOtest
+      - random
+      - random
     environment:
       grid_size: [10,10]
-
-  lqr:
-    gym_params:
-      id: LqrEnv-v0
-      entry_point: fikuka_lakuka.gym.envs:LqrEnv
-      max_episode_steps: 500
+      rocks: [[2,2], [4,5], [3,3]]
+      end: (9,9)
 
 agents:
   robots:
     PPOtest:
       name : PPOtest
+    random:
+      name: random
 
 
 
