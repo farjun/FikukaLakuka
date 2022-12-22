@@ -2,7 +2,7 @@ import gym
 
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
-from fikuka_lakuka.fikuka_lakuka.models.action import Action
+from fikuka_lakuka.fikuka_lakuka.models.action_space import ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.history import History
 from fikuka_lakuka.fikuka_lakuka.models.agent import init_agent
 from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent
@@ -13,7 +13,7 @@ class RobotsEnv_v0(gym.Env):
     def __init__(self):
         super()
         self.state = IState()
-        self.action = Action()
+        self.action = ActionSpace()
         self.observation_space = self.state.space
         self.action_space = self.action
         self.history = History()
@@ -28,7 +28,8 @@ class RobotsEnv_v0(gym.Env):
 
     def step(self, action):
         assert action in self.action_space
-        self.cur_agent.act()
+        action = self.cur_agent.act(self.state, self.history, self.action_space)
+        self.history.add_action()
 
     def reset(self, **kwargs):
         self.state = IState()
