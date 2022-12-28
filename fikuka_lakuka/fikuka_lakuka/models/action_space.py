@@ -1,10 +1,19 @@
 import random
+from enum import Enum
 from typing import Optional, Any
 
 import gym
 from gym.spaces.space import T_cov
 
 from config import config
+
+
+class Action(Enum):
+    UP = 0
+    DOWN = 1
+    LEFT = 2
+    RIGHT = 3
+    SAMPLE = 4
 
 
 class ActionSpace(gym.spaces.Space):
@@ -19,6 +28,7 @@ class ActionSpace(gym.spaces.Space):
 
     def contains(self, x) -> bool:
         pass
+
     @property
     def space(self):
         return self

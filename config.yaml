@@ -14,9 +14,12 @@ games:
       - random
       - random
     environment:
+      gas_fee: 0.1
       grid_size: [10,10]
       rocks: [[2,2], [4,5], [3,3]]
-      end: (9,9)
+      rocks_reward: [0, 1, 3]
+      start: [0,0]
+      end: [9,9]
 
 agents:
   robots:

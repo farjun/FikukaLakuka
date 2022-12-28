@@ -8,7 +8,7 @@ from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
 class Agent(abc.ABC):
 
     @abstractmethod
-    def act(self, state: IState, history: History, action_space: ActionSpace)->ActionSpace:
+    def act(self, state: IState, history: History)->ActionSpace:
         pass
 
     @abstractmethod

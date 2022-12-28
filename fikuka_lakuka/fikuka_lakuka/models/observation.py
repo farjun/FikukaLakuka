@@ -1,4 +1,0 @@
-
-
-class Observation:
-    pass

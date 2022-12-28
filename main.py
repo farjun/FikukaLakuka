@@ -14,7 +14,7 @@ def run_one_episode(env, verbose=False):
         if verbose:
             print("action:", action)
 
-        state, reward, done, info = env.step(action)
+        state, reward, done, truncated, info = env.step(action)
         sum_reward += reward
 
         if verbose:
