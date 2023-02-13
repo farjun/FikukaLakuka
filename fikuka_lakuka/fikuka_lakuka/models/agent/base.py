@@ -14,7 +14,3 @@ class Agent(abc.ABC):
     @abstractmethod
     def update(self, reward: float, history: History):
         pass
-
-    @abstractmethod
-    def reward(self, action: ActionSpace):  #
-        pass

@@ -3,6 +3,7 @@ general:
   db_name: test.db
   game_to_run: robots
 
+
 games:
   robots:
     seed: 100
@@ -11,7 +12,7 @@ games:
       entry_point: fikuka_lakuka.gym.envs:RobotsEnv
       max_episode_steps: 500
     playing_agents:
-      - random
+      - algo
       - random
     environment:
       gas_fee: 0.1
@@ -20,6 +21,7 @@ games:
       rocks_reward: [0, 1, 3]
       start: [0,0]
       end: [9,9]
+      starting_agent: 0
 
 agents:
   robots:
@@ -27,6 +29,9 @@ agents:
       name : PPOtest
     random:
       name: random
+    algo:
+      name: algo
 
 
+assets:
 

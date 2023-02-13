@@ -9,6 +9,7 @@ from fikuka_lakuka.fikuka_lakuka.models import ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.action_space import Action
 
 
+
 class IState:
     ROBOT2 = -2
     ROBOT1 = -1
@@ -20,10 +21,14 @@ class IState:
     def __init__(self):
         self.grid_size = config.get_in_game_context("environment", "grid_size")
         self.gas_fee = config.get_in_game_context("environment", "gas_fee")
+        self._cur_agent_idx = config.get_in_game_context("environment", "starting_agent")
+        self.num_of_agents = len(config.get_in_game_context("playing_agents"))
+
         agents = config.get_in_game_context("playing_agents")
         rocks_arr = config.get_in_game_context("environment", "rocks")
         rocks_reward_arr = config.get_in_game_context("environment", "rocks_reward")
 
+        self.rocks_arr = np.asarray(rocks_arr)
         self.rocks_set = set(tuple(x) for x in rocks_arr)
         self.rocks_rewards = dict((tuple(loc), reward) for loc, reward in zip(rocks_arr, rocks_reward_arr))
         self.collected_rocks = defaultdict(list)
@@ -39,16 +44,26 @@ class IState:
             self._board[rock[0], rock[1]] = IState.ROCK
 
     @property
+    def cur_agent_idx(self):
+        return self._cur_agent_idx
+
+    @property
     def board(self):
         temp_board = self._board.copy()
         for i, agent_pos in enumerate(self._agent_locations):
             temp_board[agent_pos[0], agent_pos[1]] = -(i + 1)
         return temp_board
 
+    def next_agent(self):
+        self._cur_agent_idx = (self._cur_agent_idx + 1) % self.num_of_agents
+
     def update(self, agent: int, action: int)->float:
+        if self._agent_locations[agent] == self.end_pt:
+            return 10, True
 
         if action >= Action.SAMPLE.value:
             return 0, False
+
         action = Action(action)
         reward = -self.gas_fee
         # update location
@@ -65,13 +80,16 @@ class IState:
 
         self._agent_locations[agent] = agent_pos
         agent_pos = tuple(agent_pos)
+
         # remove rocks
         if agent_pos in self.rocks_set:
             self.collected_rocks[agent].append(self.rocks_set.remove(agent_pos))
             reward += self.rocks_rewards[agent_pos]
+            self._board[agent_pos[0], agent_pos[1]] = IState.EMPTY
 
         done = all([pos == self.end_pt for pos in self._agent_locations])
 
+        self.next_agent()
         return reward, done
 
     def print(self):
@@ -79,3 +97,6 @@ class IState:
 
     def get_agent_location(self, agent: int)->Tuple[int, int]:
         return self._agent_locations[agent]
+
+    def cur_agent_location(self)->Tuple[int, int]:
+        return self.get_agent_location(self._cur_agent_idx)
