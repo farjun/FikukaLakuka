@@ -1,9 +1,9 @@
 import os
-from itertools import zip_longest
 
 import pygame
-from fikuka_lakuka.fikuka_lakuka.ui.coord import Coord, Tile
+
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
+from fikuka_lakuka.fikuka_lakuka.ui.coord import Coord, Tile
 
 PATH = os.path.split(__file__)[0]
 FILE_PATH = os.path.join(PATH, 'assets')
@@ -59,10 +59,10 @@ class GridGui(object):
         assert idx >= 0 and idx < self.n_tiles
         return Coord(idx % self.x_size, idx // self.x_size)
 
-    def draw(self,state:IState):
+    def draw(self, state: IState):
         raise NotImplementedError()
 
-    def render(self,state:IState, msg):
+    def render(self, state: IState, msg):
         raise NotImplementedError()
 
     def task_bar(self, msg):
@@ -79,29 +79,30 @@ class GridGui(object):
                 return None
 
 
-
-
 class RockGui(GridGui):
     _tile_size = 50
     _assets = dict(
         _ROBOT0=os.path.join(FILE_PATH, "r2d2.png"),
         _ROBOT1=os.path.join(FILE_PATH, "cat.png"),
-        _ROCK=os.path.join(FILE_PATH, "rock.png")
+        _ROCK=os.path.join(FILE_PATH, "rock.png"),
+        _DOOR=os.path.join(FILE_PATH, "door.png")
     )
 
-    def __init__(self,state:IState):
+    def __init__(self, state: IState):
         super().__init__(*state.grid_size, tile_size=self._tile_size)
         self.history = [state.cur_agent_ui_location()]
         self.draw(state)
         pygame.display.update()
         GridGui._dispatch()
 
-    def draw(self, state:IState):
+    def draw(self, state: IState):
         last_state = self.history[-1]
         cur_pos = state.cur_agent_ui_location()
 
         self.history.append(cur_pos)
         self.board[last_state].draw()
+        self.board[state.get_end_pt(as_ui_idx=True)].draw(
+                img=self.assets["_DOOR"])
         for i, rock in enumerate(state.rocks):
             if rock.picked:
                 color = pygame.Color('red')
@@ -111,15 +112,11 @@ class RockGui(GridGui):
             self.board[rock.ui_loc].draw(img=self.assets["_ROCK"], color=color)
 
         for agent_id in range(state.num_of_agents):
-            self.board[state.get_agent_location(agent_id, as_ui_idx=True)].draw(img=self.assets["_ROBOT" + str(agent_id)])
+            self.board[state.get_agent_location(agent_id, as_ui_idx=True)].draw(
+                img=self.assets["_ROBOT" + str(agent_id)])
 
-
-    def render(self, state:IState, msg=None):
+    def render(self, state: IState, msg=None):
         self.draw(state)
         # self.task_bar(msg)
         pygame.display.update()
         GridGui._dispatch()
-
-
-
-

@@ -24,25 +24,27 @@ class AlgoAgent(Agent):
         cur_loc = state.cur_agent_location()
         if target[0] != cur_loc[0]:
             if target[0] > cur_loc[0]:
-                return Action.RIGHT
+                return Action.DOWN
 
             elif target[0] < cur_loc[0]:
-                return Action.LEFT
+                return Action.UP
 
         if target[1] != cur_loc[1]:
             if target[1] > cur_loc[1]:
-                return Action.DOWN
+                return Action.RIGHT
 
             elif target[1] < cur_loc[1]:
-                return Action.UP
+                return Action.LEFT
 
         return None
 
     def act(self, state: IState, history: History) -> int:
-        rock_distances = self.calc_rock_distances(state)
-        min_rock = state.rocks_arr[np.argmin(rock_distances)]
-        action = self.go_towards(state, min_rock)
-        if action:
+        if state.rocks_set:
+            rock_distances = self.calc_rock_distances(state)
+            rock_distances[np.asarray(state.collected_rocks, dtype=bool)] = state.grid_size[0] * state.grid_size[1]
+            min_rock = state.rocks_arr[np.argmin(rock_distances)]
+            action = self.go_towards(state, min_rock)
+
             return action.value
         else:
             return self.go_towards(state, state.end_pt).value

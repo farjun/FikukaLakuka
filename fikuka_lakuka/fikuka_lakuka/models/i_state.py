@@ -24,7 +24,7 @@ class IState:
     ROCK = 3
 
     def __init__(self):
-        self.grid_size = config.get_in_game_context("environment", "grid_size")
+        self.grid_size: Tuple[int, int] = config.get_in_game_context("environment", "grid_size")
         self.gas_fee = config.get_in_game_context("environment", "gas_fee")
         self._cur_agent_idx = config.get_in_game_context("environment", "starting_agent")
         self.num_of_agents = len(config.get_in_game_context("playing_agents"))
@@ -36,7 +36,7 @@ class IState:
         self.rocks_arr_ui = [loc[0]*self.grid_size[0] + loc[1] for loc in self.rocks_arr]
         self.rocks_set = set(tuple(x) for x in self.rocks_arr)
         self.rocks_rewards = dict((tuple(loc), reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr))
-        self.collected_rocks = defaultdict(list)
+        self.collected_rocks = [False]*len(self.rocks_arr)
 
         self.start_pt = config.get_in_game_context("environment", "start")
         self.end_pt = config.get_in_game_context("environment", "end")
@@ -91,9 +91,10 @@ class IState:
         if agent_pos in self.rocks_set:
             self.rocks[self.rocks_arr.index(agent_pos)].picked = True
 
-            self.collected_rocks[agent].append(self.rocks_set.remove(agent_pos))
+            self.collected_rocks[self.rocks_arr.index(agent_pos)] = True
             reward += self.rocks_rewards[agent_pos]
             self._board[agent_pos[0], agent_pos[1]] = IState.EMPTY
+            self.rocks_set.remove(agent_pos)
 
         done = all([pos == self.end_pt for pos in self._agent_locations])
 
@@ -115,3 +116,12 @@ class IState:
     def cur_agent_ui_location(self)->int:
         cur_pos = self.get_agent_location(self._cur_agent_idx)
         return cur_pos[0]*self.grid_size[0] + cur_pos[1]
+
+    def get_end_pt(self, as_ui_idx = False)->Tuple[int, int]:
+        if as_ui_idx:
+            return self._as_ui_pt(self.end_pt)
+        else:
+            return self.end_pt
+
+    def _as_ui_pt(self, pt: Tuple[int,int]):
+        return pt[0] * self.grid_size[0] + pt[1]
