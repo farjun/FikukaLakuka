@@ -83,7 +83,7 @@ class RockGui(GridGui):
     _tile_size = 50
     _assets = dict(
         _ROBOT0=os.path.join(FILE_PATH, "r2d2.png"),
-        _ROBOT1=os.path.join(FILE_PATH, "cat.png"),
+        _ROBOT1=os.path.join(FILE_PATH, "robot1.png"),
         _ROCK=os.path.join(FILE_PATH, "rock.png"),
         _DOOR=os.path.join(FILE_PATH, "door.png")
     )
