@@ -7,7 +7,12 @@ import numpy as np
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models import ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.action_space import Action
-
+from pydantic import BaseModel
+class RockTile(BaseModel):
+    loc: Tuple[int,int]
+    ui_loc: int
+    reward: float
+    picked = False
 
 
 class IState:
@@ -25,12 +30,12 @@ class IState:
         self.num_of_agents = len(config.get_in_game_context("playing_agents"))
 
         agents = config.get_in_game_context("playing_agents")
-        rocks_arr = config.get_in_game_context("environment", "rocks")
         rocks_reward_arr = config.get_in_game_context("environment", "rocks_reward")
-
-        self.rocks_arr = np.asarray(rocks_arr)
-        self.rocks_set = set(tuple(x) for x in rocks_arr)
-        self.rocks_rewards = dict((tuple(loc), reward) for loc, reward in zip(rocks_arr, rocks_reward_arr))
+        self.rocks_arr = [tuple(x) for x in config.get_in_game_context("environment", "rocks")]
+        self.rocks = [RockTile(loc=loc,ui_loc=loc[0]*self.grid_size[0] + loc[1], reward=reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr)]
+        self.rocks_arr_ui = [loc[0]*self.grid_size[0] + loc[1] for loc in self.rocks_arr]
+        self.rocks_set = set(tuple(x) for x in self.rocks_arr)
+        self.rocks_rewards = dict((tuple(loc), reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr))
         self.collected_rocks = defaultdict(list)
 
         self.start_pt = config.get_in_game_context("environment", "start")
@@ -38,6 +43,7 @@ class IState:
         assert len(self.grid_size) == 2, "only 2d grid is supported.. common..."
         self._board = np.zeros(self.grid_size, dtype=int)
         self._agent_locations = [self.start_pt.copy() for agent in agents]
+
         self._board[self.start_pt[0], self.start_pt[1]] = IState.START
         self._board[self.end_pt[0], self.end_pt[1]] = IState.END
         for rock in self.rocks_set:
@@ -83,6 +89,8 @@ class IState:
 
         # remove rocks
         if agent_pos in self.rocks_set:
+            self.rocks[self.rocks_arr.index(agent_pos)].picked = True
+
             self.collected_rocks[agent].append(self.rocks_set.remove(agent_pos))
             reward += self.rocks_rewards[agent_pos]
             self._board[agent_pos[0], agent_pos[1]] = IState.EMPTY
@@ -95,8 +103,15 @@ class IState:
     def print(self):
         print(self.board)
 
-    def get_agent_location(self, agent: int)->Tuple[int, int]:
-        return self._agent_locations[agent]
+    def get_agent_location(self, agent: int, as_ui_idx = False)->Tuple[int, int]:
+        cur_pos = self._agent_locations[agent]
+        if as_ui_idx:
+            return cur_pos[0]*self.grid_size[0] + cur_pos[1]
+        return cur_pos
 
     def cur_agent_location(self)->Tuple[int, int]:
         return self.get_agent_location(self._cur_agent_idx)
+
+    def cur_agent_ui_location(self)->int:
+        cur_pos = self.get_agent_location(self._cur_agent_idx)
+        return cur_pos[0]*self.grid_size[0] + cur_pos[1]

@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Optional, Any
 
 import gym
-from gym.spaces.space import T_cov
 
 from config import config
 
@@ -23,7 +22,7 @@ class ActionSpace(gym.spaces.Space):
         self.num_of_actions = len(self.rocks_arr) + 4
         super(ActionSpace, self).__init__((1, self.num_of_actions), dtype=int)
 
-    def sample(self, mask: Optional[Any] = None) -> T_cov:
+    def sample(self, mask: Optional[Any] = None):
         return random.randint(1, self.num_of_actions)
 
     def contains(self, x) -> bool:

@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # encoding: utf-8
+from time import sleep
 
 import gym
 import fikuka_lakuka
 
 def run_one_episode(env, verbose=False):
     env.reset()
-    sum_reward = 0
+    reward = 0
 
     for i in range(env.MAX_STEPS):
         action = env.action_space.sample()
@@ -14,8 +15,7 @@ def run_one_episode(env, verbose=False):
         if verbose:
             print("action:", action)
 
-        state, reward, done, truncated, info = env.step(action)
-        sum_reward += reward
+        observation, reward, done, info = env.step(action)
 
         if verbose:
             env.render()
@@ -25,11 +25,13 @@ def run_one_episode(env, verbose=False):
                 print("done @ step {}".format(i))
 
             break
+        sleep(0.5)
+
 
     if verbose:
-        print("cumulative reward", sum_reward)
+        print("cumulative reward", reward)
 
-    return sum_reward
+    return reward
 
 
 def main():
@@ -41,8 +43,8 @@ def main():
     # (no policy)
     history = []
 
-    for _ in range(10000):
-        sum_reward = run_one_episode(env, verbose=False)
+    for _ in range(1):
+        sum_reward = run_one_episode(env, verbose=True)
         history.append(sum_reward)
 
     avg_sum_reward = sum(history) / len(history)

@@ -7,7 +7,7 @@ from fikuka_lakuka.fikuka_lakuka.models.history import History
 from fikuka_lakuka.fikuka_lakuka.models.agent import init_agent
 from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent
 from fikuka_lakuka.fikuka_lakuka.models.observation_space import ObservationSpace
-from fikuka_lakuka.fikuka_lakuka.ui.robots import RobotsUI
+from fikuka_lakuka.fikuka_lakuka.ui.gui import RockGui
 
 
 class RobotsEnv_v0(gym.Env):
@@ -24,34 +24,32 @@ class RobotsEnv_v0(gym.Env):
         self.observation_space = self._observation_space.space
         self.agents = [init_agent(agent_id) for agent_id in config.get_in_game_context("playing_agents")]
         self.action_space = self.action
+        self.grid_size = config.get_in_game_context("environment", "grid_size")
+        self.gui = RockGui(self.state)
 
     @property
     def cur_agent(self) -> Agent:
         return self.agents[self.state.cur_agent_idx]
-
-    @property
-    def ui_renderer(self):
-        if not self._ui_renderer:
-            self._ui_renderer = RobotsUI()
-        return self._ui_renderer
 
     def step(self, action):
         assert action in self.action_space
         action = self.cur_agent.act(self.state, self.history)
         self.history.add_action(action)
         reward, done = self.state.update(self.state.cur_agent_idx, action)
-        return self.state.board, reward, done, False, {"info": "some info"}
+        return self.state.board, reward, done, {"info": "some info"}
 
     def reset(self, **kwargs):
         self.state = IState()
         return self.state.board,  {"info": "some info"}
 
     def sample(self):
-        action = self.cur_agent.act(self.history)
+        action = self.cur_agent.act(self.state, self.history)
         return action.space
 
     def render(self, mode='not', close=False):
+        if close:
+            return
         if mode=="human":
-            self.ui_renderer.show(self.state.board)
+            self.gui.render(self.state)
         else:
             self.state.print()

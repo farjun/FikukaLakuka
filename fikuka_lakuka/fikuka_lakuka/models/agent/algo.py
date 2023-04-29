@@ -18,7 +18,7 @@ class AlgoAgent(Agent):
         self.action_space = ActionSpace()
 
     def calc_rock_distances(self, state: IState):
-        return np.linalg.norm(state.rocks_arr - state.cur_agent_location(), axis=1)
+        return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1)
 
     def go_towards(self, state: IState, target: np.ndarray)->Action:
         cur_loc = state.cur_agent_location()
