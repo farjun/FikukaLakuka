@@ -96,7 +96,7 @@ class IState:
             self._board[agent_pos[0], agent_pos[1]] = IState.EMPTY
             self.rocks_set.remove(agent_pos)
 
-        done = all([pos == self.end_pt for pos in self._agent_locations])
+        done = any([pos == self.end_pt for pos in self._agent_locations])
 
         self.next_agent()
         return reward, done

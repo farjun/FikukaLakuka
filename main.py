@@ -25,7 +25,7 @@ def run_one_episode(env, verbose=False):
                 print("done @ step {}".format(i))
 
             break
-        sleep(0.5)
+        sleep(0.2)
 
 
     if verbose:
