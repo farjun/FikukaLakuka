@@ -5,13 +5,13 @@ import numpy as np
 
 from fikuka_lakuka.fikuka_lakuka.models import History, ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
-from fikuka_lakuka.fikuka_lakuka.models.action_space import Action
+from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Actions
 
 
 class Agent(abc.ABC):
 
     @abstractmethod
-    def act(self, state: IState, history: History)->ActionSpace:
+    def act(self, state: IState, history: History)->Action:
         pass
 
     @abstractmethod
@@ -21,20 +21,20 @@ class Agent(abc.ABC):
     def calc_rock_distances(self, state: IState):
         return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1)
 
-    def go_towards(self, state: IState, target: np.ndarray)->Action:
+    def go_towards(self, state: IState, target: np.ndarray)->Actions:
         cur_loc = state.cur_agent_location()
         if target[0] != cur_loc[0]:
             if target[0] > cur_loc[0]:
-                return Action.DOWN
+                return Actions.DOWN
 
             elif target[0] < cur_loc[0]:
-                return Action.UP
+                return Actions.UP
 
         if target[1] != cur_loc[1]:
             if target[1] > cur_loc[1]:
-                return Action.RIGHT
+                return Actions.RIGHT
 
             elif target[1] < cur_loc[1]:
-                return Action.LEFT
+                return Actions.LEFT
 
         return None

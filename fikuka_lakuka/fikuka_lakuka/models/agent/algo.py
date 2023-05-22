@@ -22,11 +22,11 @@ class AlgoAgent(Agent):
             rock_distances = self.calc_rock_distances(state)
             rock_distances[np.asarray(state.collected_rocks, dtype=bool)] = state.grid_size[0] * state.grid_size[1]
             min_rock = state.rocks_arr[np.argmin(rock_distances)]
-            action = self.go_towards(state, min_rock)
+            action = Action(action_type=self.go_towards(state, min_rock))
 
-            return action.value
+            return action
         else:
-            return self.go_towards(state, state.end_pt).value
+            return Action(action_type=self.go_towards(state, state.end_pt))
 
     def update(self, reward: float, history: History):
         pass

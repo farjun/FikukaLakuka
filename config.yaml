@@ -1,6 +1,6 @@
 
 general:
-  db_name: test.db
+  db_name: run_1
   game_to_run: robots
 
 
@@ -15,6 +15,7 @@ games:
       - algo
       - random
     environment:
+      sample_prob: 0.2
       gas_fee: 0.1
       grid_size: [10,10]
       rocks: [[2,2], [4,5], [3,3]]

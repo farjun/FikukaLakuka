@@ -1,3 +1,4 @@
+import random
 from collections import defaultdict
 from typing import Tuple
 
@@ -6,7 +7,7 @@ import numpy as np
 
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models import ActionSpace
-from fikuka_lakuka.fikuka_lakuka.models.action_space import Action
+from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Observation, Actions
 from pydantic import BaseModel
 class RockTile(BaseModel):
     loc: Tuple[int,int]
@@ -63,25 +64,27 @@ class IState:
     def next_agent(self):
         self._cur_agent_idx = (self._cur_agent_idx + 1) % self.num_of_agents
 
-    def update(self, agent: int, action: int)->float:
+    def sample_rock(self, rock_loc: Tuple[int, int]):
+        return random.sample([Observation.BAD_ROCK, Observation.GOOD_ROCK],1)[0]
+
+    def update(self, agent: int, action: Action)->Tuple[float, bool, Observation]:
         if self._agent_locations[agent] == self.end_pt:
-            return 10, True
+            return 10, True, Observation.NO_OBS
 
-        if action >= Action.SAMPLE.value:
-            return 0, False
+        if action.action_type == Actions.SAMPLE:
+            return 0, False, self.sample_rock(action.rock_sample_loc)
 
-        action = Action(action)
         reward = -self.gas_fee
         # update location
         agent_pos = self._agent_locations[agent]
         board_x, board_y = self._board.shape
-        if action == Action.LEFT:
+        if action.action_type == Actions.LEFT:
             agent_pos[1] = max([0, agent_pos[1] - 1])
-        elif action == Action.RIGHT:
+        elif action.action_type == Actions.RIGHT:
             agent_pos[1] = min([board_x -1, agent_pos[1] + 1])
-        elif action == Action.UP:
+        elif action.action_type == Actions.UP:
             agent_pos[0] = max([0, agent_pos[0] - 1])
-        elif action == Action.DOWN:
+        elif action.action_type == Actions.DOWN:
             agent_pos[0] = min([board_y -1, agent_pos[0] + 1])
 
         self._agent_locations[agent] = agent_pos
@@ -99,7 +102,7 @@ class IState:
         done = any([pos == self.end_pt for pos in self._agent_locations])
 
         self.next_agent()
-        return reward, done
+        return reward, done, Observation.NO_OBS
 
     def print(self):
         print(self.board)
@@ -112,6 +115,9 @@ class IState:
 
     def cur_agent_location(self)->Tuple[int, int]:
         return self.get_agent_location(self._cur_agent_idx)
+
+    def agent_locations(self)->Tuple[int, int]:
+        return self._agent_locations
 
     def cur_agent_ui_location(self)->int:
         cur_pos = self.get_agent_location(self._cur_agent_idx)

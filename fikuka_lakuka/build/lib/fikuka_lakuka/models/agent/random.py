@@ -15,7 +15,7 @@ class RandomAgent(Agent):
         self.action_space = ActionSpace()
 
     def act(self, state: IState, history: History) -> Action:
-        return Action.sample()
+        return random.randint(1, self.action_space.num_of_actions)
 
     def update(self, reward: float, history: History):
         pass

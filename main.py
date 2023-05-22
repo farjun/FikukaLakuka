@@ -4,8 +4,12 @@ from time import sleep
 
 import gym
 import fikuka_lakuka
+from fikuka_lakuka.fikuka_lakuka.data.api import DataApi
+from fikuka_lakuka.fikuka_lakuka.gym_envs.robots.env import RobotsEnv_v0
 
-def run_one_episode(env, verbose=False):
+
+def run_one_episode(env: RobotsEnv_v0, verbose=False):
+    data_api = DataApi()
     env.reset()
     reward = 0
 
@@ -21,6 +25,7 @@ def run_one_episode(env, verbose=False):
             env.render()
 
         if done:
+            data_api.write_history(env.history)
             if verbose:
                 print("done @ step {}".format(i))
 
