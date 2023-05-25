@@ -9,7 +9,7 @@ from fikuka_lakuka.fikuka_lakuka.gym_envs.robots.env import RobotsEnv_v0
 
 
 def run_one_episode(env: RobotsEnv_v0, verbose=False):
-    data_api = DataApi()
+    data_api = DataApi(force_recreate=True)
     env.reset()
     reward = 0
 
@@ -30,7 +30,7 @@ def run_one_episode(env: RobotsEnv_v0, verbose=False):
                 print("done @ step {}".format(i))
 
             break
-        sleep(0.2)
+        # sleep(0.2)
 
 
     if verbose:

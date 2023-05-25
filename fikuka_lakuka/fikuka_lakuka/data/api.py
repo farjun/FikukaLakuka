@@ -1,11 +1,12 @@
+import io
 import sqlite3
-from typing import Tuple
+from pathlib import Path
 
 import numpy as np
-import io
+
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models import History
-from pathlib import Path
+
 DBS_FOLDER = Path(__file__).parent / "runs"
 
 
@@ -24,8 +25,9 @@ def convert_array(text):
     out.seek(0)
     return np.load(out)
 
+
 class DataApi:
-    def __init__(self):
+    def __init__(self, force_recreate = False):
         self.db_path = DBS_FOLDER / config.get("general", "db_name")
         self._db_con = sqlite3.connect(str(self.db_path), detect_types=sqlite3.PARSE_DECLTYPES)
 
@@ -35,7 +37,7 @@ class DataApi:
         # Converts TEXT to np.array when selecting
         sqlite3.register_converter("array", convert_array)
 
-        self.create_tables()
+        self.create_tables(force_recreate=force_recreate)
 
     def create_tables(self, force_recreate=False):
         cur = self._db_con.cursor()
@@ -44,7 +46,8 @@ class DataApi:
             cur.execute(f"drop table if exists history")
 
         print(f"Running - create tables if not exists")
-        cur.execute(f"create table if not exists history (step int, action int, observation int, agents_locations array)")
+        cur.execute(
+            f"create table if not exists history (step int, cur_agent int, action string, observation string, agents_locations string)")
 
     def close(self):
         self._db_con.close()
@@ -52,10 +55,10 @@ class DataApi:
     def commit(self):
         self._db_con.commit()
 
-    def write_history(self, history :History):
+    def write_history(self, history: History):
         cur = self._db_con.cursor()
         for i, step in enumerate(history.to_db_obj()):
-            cur.execute("insert into history (step, action, observation, agents_locations) values (?,?,?,?)",
+            cur.execute("insert into history (step, cur_agent, action, observation, agents_locations) values (?,?,?,?,?)",
                         (i, *step))
         self._db_con.commit()
         cur.close()
