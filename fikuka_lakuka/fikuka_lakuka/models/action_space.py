@@ -23,8 +23,17 @@ class Action(BaseModel):
 
 
     @staticmethod
-    def sample():
-        return Action(action_type=Actions(random.randint(0, NUM_OF_ACTIONS)))
+    def sample(rock_sample_loc = None):
+        rocks_arr = config.get_in_game_context("environment", "rocks")
+        action_type = Actions(random.randint(0, NUM_OF_ACTIONS))
+        if action_type == Actions.SAMPLE:
+            rock_sample_loc = rock_sample_loc or rocks_arr[random.randint(0, len(rocks_arr)-1)]
+            return Action(action_type=action_type, rock_sample_loc=rock_sample_loc)
+        else:
+            return Action(action_type=action_type)
+
+
+
 
 class Observation(Enum):
     NO_OBS = -1

@@ -28,5 +28,3 @@ class AlgoAgent(Agent):
         else:
             return Action(action_type=self.go_towards(state, state.end_pt))
 
-    def update(self, reward: float, history: History):
-        pass

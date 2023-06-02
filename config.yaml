@@ -13,7 +13,7 @@ games:
       max_episode_steps: 500
     playing_agents:
       - algo
-      - random
+      - bbu
     environment:
       sample_prob: 0.2
       gas_fee: 0.1
@@ -32,6 +32,8 @@ agents:
       name: random
     algo:
       name: algo
+    bbu:
+      name: bbu
 
 
 assets:

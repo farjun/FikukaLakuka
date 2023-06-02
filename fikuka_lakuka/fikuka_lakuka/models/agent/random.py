@@ -17,5 +17,3 @@ class RandomAgent(Agent):
     def act(self, state: IState, history: History) -> Action:
         return Action.sample()
 
-    def update(self, reward: float, history: History):
-        pass

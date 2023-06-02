@@ -30,7 +30,7 @@ def run_one_episode(env: RobotsEnv_v0, verbose=False):
                 print("done @ step {}".format(i))
 
             break
-        # sleep(0.2)
+        sleep(0.2)
 
 
     if verbose:

@@ -9,6 +9,7 @@ from config import config
 from fikuka_lakuka.fikuka_lakuka.models import ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Observation, Actions
 from pydantic import BaseModel
+
 class RockTile(BaseModel):
     loc: Tuple[int,int]
     ui_loc: int
@@ -66,6 +67,12 @@ class IState:
 
     def sample_rock(self, rock_loc: Tuple[int, int]):
         return random.sample([Observation.BAD_ROCK, Observation.GOOD_ROCK],1)[0]
+
+    def calc_sample_prob(self, rock_loc: Tuple[int, int])->float:
+        location = self.cur_agent_location()
+        sample_prob = config.get_in_game_context("environment", "sample_prob")
+        manhetten_dist = abs(location[0] - rock_loc[0]) + abs(location[1] - rock_loc[1])
+        return 1/manhetten_dist * sample_prob
 
     def update(self, agent: int, action: Action)->Tuple[float, bool, Observation]:
         if self._agent_locations[agent] == self.end_pt:

@@ -1,12 +1,13 @@
 import abc
 from abc import abstractmethod
+from typing import Tuple
 
 import numpy as np
 
 from fikuka_lakuka.fikuka_lakuka.models import History, ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
 from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Actions
-
+from config import config
 
 class Agent(abc.ABC):
 
@@ -14,8 +15,7 @@ class Agent(abc.ABC):
     def act(self, state: IState, history: History)->Action:
         pass
 
-    @abstractmethod
-    def update(self, reward: float, history: History):
+    def update(self, state: IState, reward: float, history: History):
         pass
 
     def calc_rock_distances(self, state: IState):
