@@ -15,7 +15,7 @@ games:
       - algo
       - bbu
     environment:
-      sample_prob: 0.2
+      sample_prob: 0.9
       gas_fee: 0.1
       grid_size: [10,10]
       rocks: [[2,2], [4,5], [3,3]]

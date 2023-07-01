@@ -4,6 +4,8 @@ from time import sleep
 
 import gym
 import fikuka_lakuka
+from fikuka_lakuka.fikuka_lakuka.data.plotting import plot_3d_data
+from fikuka_lakuka.fikuka_lakuka.data.data_utils import DataUtils
 from fikuka_lakuka.fikuka_lakuka.data.api import DataApi
 from fikuka_lakuka.fikuka_lakuka.gym_envs.robots.env import RobotsEnv_v0
 
@@ -48,13 +50,18 @@ def main():
     # (no policy)
     history = []
 
-    for _ in range(1):
-        sum_reward = run_one_episode(env, verbose=True)
-        history.append(sum_reward)
+    sum_reward = run_one_episode(env, verbose=True)
+    history.append(sum_reward)
 
     avg_sum_reward = sum(history) / len(history)
     print("\nbaseline cumulative reward: {:6.2}".format(avg_sum_reward))
 
+def run_state_clustering():
+    data_api = DataApi()
+    du = DataUtils(data_api)
+    clustered_states = du.cluster_states("bbu")
+    plot_3d_data(clustered_states, "baysian update states")
 
 if __name__ == "__main__":
     main()
+    # run_state_clustering()#

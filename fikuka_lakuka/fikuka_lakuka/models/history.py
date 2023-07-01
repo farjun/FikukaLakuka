@@ -30,5 +30,7 @@ class History:
     def to_db_obj(self)->List[List[int]]:
         return [step.to_arr() for step in self.past]
 
+    def cur_step(self):
+        return len(self.past)
 
 

@@ -69,6 +69,7 @@ class IState:
         return random.sample([Observation.BAD_ROCK, Observation.GOOD_ROCK],1)[0]
 
     def calc_sample_prob(self, rock_loc: Tuple[int, int])->float:
+
         location = self.cur_agent_location()
         sample_prob = config.get_in_game_context("environment", "sample_prob")
         manhetten_dist = abs(location[0] - rock_loc[0]) + abs(location[1] - rock_loc[1])
