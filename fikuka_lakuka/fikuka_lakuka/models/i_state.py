@@ -1,6 +1,6 @@
 import random
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, List
 
 import gym
 import numpy as np
@@ -34,7 +34,7 @@ class IState:
         agents = config.get_in_game_context("playing_agents")
         rocks_reward_arr = config.get_in_game_context("environment", "rocks_reward")
         self.rocks_arr = [tuple(x) for x in config.get_in_game_context("environment", "rocks")]
-        self.rocks = [RockTile(loc=loc,ui_loc=loc[0]*self.grid_size[0] + loc[1], reward=reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr)]
+        self.rocks: List[RockTile] = [RockTile(loc=loc,ui_loc=loc[0]*self.grid_size[0] + loc[1], reward=reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr)]
         self.rocks_arr_ui = [loc[0]*self.grid_size[0] + loc[1] for loc in self.rocks_arr]
         self.rocks_set = set(tuple(x) for x in self.rocks_arr)
         self.rocks_rewards = dict((tuple(loc), reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr))
@@ -68,13 +68,15 @@ class IState:
     def sample_rock(self, rock_loc: Tuple[int, int]):
         return random.sample([Observation.BAD_ROCK, Observation.GOOD_ROCK],1)[0]
 
-    def calc_sample_prob(self, rock_loc: Tuple[int, int])->float:
-
+    def calc_good_sample_prob(self, rock_loc: Tuple[int, int], given_that_rock: Observation)->float:
         location = self.cur_agent_location()
         sample_prob = config.get_in_game_context("environment", "sample_prob")
         manhetten_dist = abs(location[0] - rock_loc[0]) + abs(location[1] - rock_loc[1])
-        return 1/manhetten_dist * sample_prob
+        if given_that_rock == Observation.GOOD_ROCK:
+            return 1/manhetten_dist * sample_prob
 
+        elif given_that_rock == Observation.BAD_ROCK:
+            return 1 - (1 / manhetten_dist * sample_prob)
     def update(self, agent: int, action: Action)->Tuple[float, bool, Observation]:
         if self._agent_locations[agent] == self.end_pt:
             return 10, True, Observation.NO_OBS

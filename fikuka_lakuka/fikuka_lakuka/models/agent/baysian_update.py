@@ -17,7 +17,22 @@ class BaysianBeliefAgent(Agent):
         self.data_api = DataApi()
 
     def act(self, state: IState, history: History) -> int:
-        return Action.sample()
+        if not state.rocks_set:
+            return self.go_to_exit(state)
+        rock_dists = self.get_rock_distances(state)
+        rock_scores = list()
+        for dist, rock in zip(rock_dists, state.rocks):
+            if rock.picked:
+                rock_scores.append(-10)
+            else:
+                rock_good_prob = self.rock_probs[rock.loc][Observation.GOOD_ROCK]
+                rock_scores.append(rock_good_prob - dist*0.1)
+
+        max_score_rock_idx = rock_scores.index(max(rock_scores))
+        if rock_scores[max_score_rock_idx] < 0.5:
+            return Action(action_type=Actions.SAMPLE, rock_sample_loc=state.rocks[max_score_rock_idx].loc)
+
+        return Action(action_type=self.go_towards(state, state.rocks[max_score_rock_idx].loc))
 
     def update(self, state: IState, reward: float, history: History):
         history_step = history.past[-1]
@@ -25,12 +40,13 @@ class BaysianBeliefAgent(Agent):
         if last_action.action_type == Actions.SAMPLE:
             rock_prob = self.rock_probs[last_action.rock_sample_loc]
             if history_step.observation == Observation.GOOD_ROCK:
-                good_rock_prob = rock_prob[Observation.GOOD_ROCK] * state.calc_sample_prob(last_action.rock_sample_loc) + \
-                rock_prob[Observation.BAD_ROCK] * (1-state.calc_sample_prob(last_action.rock_sample_loc))
+                good_rock_prob = rock_prob[Observation.GOOD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK) + \
+                                 rock_prob[Observation.BAD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
                 bad_rock_prob = 1 - good_rock_prob
+
             else:
-                bad_rock_prob = rock_prob[Observation.BAD_ROCK] * state.calc_sample_prob(last_action.rock_sample_loc)+ \
-                rock_prob[Observation.GOOD_ROCK] * (1-state.calc_sample_prob(last_action.rock_sample_loc))
+                bad_rock_prob = rock_prob[Observation.GOOD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK) + \
+                                rock_prob[Observation.BAD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
                 good_rock_prob = 1 - bad_rock_prob
 
             self.rock_probs[last_action.rock_sample_loc] = {Observation.GOOD_ROCK: good_rock_prob,

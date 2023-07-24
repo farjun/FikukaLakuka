@@ -1,6 +1,6 @@
 import abc
 from abc import abstractmethod
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 
@@ -21,6 +21,9 @@ class Agent(abc.ABC):
     def calc_rock_distances(self, state: IState):
         return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1)
 
+    def go_to_exit(self, state):
+        return Action(action_type=self.go_towards(state, state.end_pt))
+
     def go_towards(self, state: IState, target: np.ndarray)->Actions:
         cur_loc = state.cur_agent_location()
         if target[0] != cur_loc[0]:
@@ -38,3 +41,11 @@ class Agent(abc.ABC):
                 return Actions.LEFT
 
         return None
+
+    def get_rock_distances(self, state: IState)->List[int]:
+        dists = list()
+        for rock in state.rocks:
+            agnet_location = state.cur_agent_location()
+            dists.append(abs(agnet_location[0] -rock.loc[0]) + abs(agnet_location[1] -rock.loc[1]))
+
+        return dists

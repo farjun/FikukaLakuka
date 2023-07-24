@@ -3,7 +3,6 @@
 from time import sleep
 
 import gym
-import fikuka_lakuka
 from fikuka_lakuka.fikuka_lakuka.data.plotting import plot_3d_data
 from fikuka_lakuka.fikuka_lakuka.data.data_utils import DataUtils
 from fikuka_lakuka.fikuka_lakuka.data.api import DataApi
@@ -32,7 +31,7 @@ def run_one_episode(env: RobotsEnv_v0, verbose=False):
                 print("done @ step {}".format(i))
 
             break
-        sleep(0.2)
+        sleep(0.05)
 
 
     if verbose:
@@ -44,7 +43,6 @@ def run_one_episode(env: RobotsEnv_v0, verbose=False):
 def main():
     # first, create the custom environment and run it for one episode
     env = gym.make("robots-v0")
-    sum_reward = run_one_episode(env, verbose=True)
 
     # next, calculate a baseline of rewards based on random actions
     # (no policy)
@@ -64,4 +62,4 @@ def run_state_clustering():
 
 if __name__ == "__main__":
     main()
-    # run_state_clustering()#
+    # run_state_clustering()

@@ -18,13 +18,14 @@ class AlgoAgent(Agent):
         self.action_space = ActionSpace()
 
     def act(self, state: IState, history: History) -> int:
-        if state.rocks_set:
-            rock_distances = self.calc_rock_distances(state)
-            rock_distances[np.asarray(state.collected_rocks, dtype=bool)] = state.grid_size[0] * state.grid_size[1]
-            min_rock = state.rocks_arr[np.argmin(rock_distances)]
-            action = Action(action_type=self.go_towards(state, min_rock))
+        if not state.rocks_set:
+            return self.go_to_exit(state)
 
-            return action
-        else:
-            return Action(action_type=self.go_towards(state, state.end_pt))
+        rock_distances = self.calc_rock_distances(state)
+        rock_distances[np.asarray(state.collected_rocks, dtype=bool)] = state.grid_size[0] * state.grid_size[1]
+        min_rock = state.rocks_arr[np.argmin(rock_distances)]
+        action = Action(action_type=self.go_towards(state, min_rock))
+
+        return action
+
 
