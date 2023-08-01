@@ -45,6 +45,7 @@ class BaysianBeliefAgent(Agent):
                 bad_rock_prob = 1 - good_rock_prob
 
             else:
+                # todo - change this to calc_good_sample_prob?
                 bad_rock_prob = rock_prob[Observation.GOOD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK) + \
                                 rock_prob[Observation.BAD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
                 good_rock_prob = 1 - bad_rock_prob
