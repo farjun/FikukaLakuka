@@ -72,11 +72,18 @@ class IState:
         location = self.cur_agent_location()
         sample_prob = config.get_in_game_context("environment", "sample_prob")
         manhetten_dist = abs(location[0] - rock_loc[0]) + abs(location[1] - rock_loc[1])
+        sample_prob_with_distance = 1 / manhetten_dist * sample_prob
         if given_that_rock == Observation.GOOD_ROCK:
-            return 1/manhetten_dist * sample_prob
+            if self.rocks_rewards[rock_loc] > 0: # good rock
+                return sample_prob_with_distance
+            else: # bad rock
+                return 1 - sample_prob_with_distance
 
         elif given_that_rock == Observation.BAD_ROCK:
-            return 1 - (1 / manhetten_dist * sample_prob)
+            if self.rocks_rewards[rock_loc] > 0: # good rock
+                return 1 - sample_prob_with_distance
+            else: # bad rock
+                return sample_prob_with_distance
     def update(self, agent: int, action: Action)->Tuple[float, bool, Observation]:
         if self._agent_locations[agent] == self.end_pt:
             return 10, True, Observation.NO_OBS
