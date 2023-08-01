@@ -54,11 +54,7 @@ def main():
     avg_sum_reward = sum(history) / len(history)
     print("\nbaseline cumulative reward: {:6.2}".format(avg_sum_reward))
 
-def run_state_clustering():
-    data_api = DataApi()
-    du = DataUtils(data_api)
-    clustered_states = du.cluster_states("bbu")
-    plot_3d_data(clustered_states, "baysian update states")
+
 
 if __name__ == "__main__":
     main()

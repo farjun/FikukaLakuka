@@ -18,7 +18,7 @@ class HistoryStep(BaseModel):
 
     @staticmethod
     def from_arr(arr:List[int]):
-        return HistoryStep(cur_agent= arr[0],action=arr[1], observation=arr[2], reward=arr[3], players_pos=arr[4])
+        return HistoryStep(cur_agent=arr[0],action=arr[1], observation=arr[2], reward=arr[3], players_pos=arr[4])
 
 class History:
     def __init__(self, past: List[HistoryStep] = None):

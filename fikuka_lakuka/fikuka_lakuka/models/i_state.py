@@ -111,7 +111,6 @@ class IState:
 
         done = any([pos == self.end_pt for pos in self._agent_locations])
 
-        self.next_agent()
         return reward, done, Observation.NO_OBS
 
     def print(self):

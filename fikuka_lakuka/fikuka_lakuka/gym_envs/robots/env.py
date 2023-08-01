@@ -37,6 +37,7 @@ class RobotsEnv_v0(gym.Env):
         reward, done, observation = self.state.update(self.state.cur_agent_idx, action)
         self.history.update(self.state.cur_agent_idx, action, observation, reward,  self.state.agent_locations())
         self.cur_agent.update(self.state, reward, self.history)
+        self.state.next_agent()
         return self.state.board, reward, done, {"info": "some info"}
 
     def reset(self, **kwargs):
