@@ -68,22 +68,19 @@ class IState:
     def sample_rock(self, rock_loc: Tuple[int, int]):
         return random.sample([Observation.BAD_ROCK, Observation.GOOD_ROCK],1)[0]
 
-    def calc_good_sample_prob(self, rock_loc: Tuple[int, int], given_that_rock: Observation)->float:
+    def calc_good_sample_prob(self, rock_loc: Tuple[int, int], observation: Observation)->(float,float):
         location = self.cur_agent_location()
+        # sensor quality
         sample_prob = config.get_in_game_context("environment", "sample_prob")
-        manhetten_dist = abs(location[0] - rock_loc[0]) + abs(location[1] - rock_loc[1])
-        sample_prob_with_distance = 1 / manhetten_dist * sample_prob
-        if given_that_rock == Observation.GOOD_ROCK:
-            if self.rocks_rewards[rock_loc] > 0: # good rock
-                return sample_prob_with_distance
-            else: # bad rock
-                return 1 - sample_prob_with_distance
+        # distance to rock
+        distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
+        # measurement error function
+        sample_prob_with_distance = 1/2 * (1 + np.exp(-distance_to_rock * np.log(2)/sample_prob))
+        if observation == Observation.GOOD_ROCK:
+            return sample_prob_with_distance, 1-sample_prob_with_distance
+        if observation == Observation.BAD_ROCK:
+            return 1 - sample_prob_with_distance, sample_prob_with_distance
 
-        elif given_that_rock == Observation.BAD_ROCK:
-            if self.rocks_rewards[rock_loc] > 0: # good rock
-                return 1 - sample_prob_with_distance
-            else: # bad rock
-                return sample_prob_with_distance
     def update(self, agent: int, action: Action)->Tuple[float, bool, Observation]:
         if self._agent_locations[agent] == self.end_pt:
             return 10, True, Observation.NO_OBS

@@ -28,6 +28,7 @@ class BaysianBeliefAgent(Agent):
                 rock_scores.append(-10)
             else:
                 rock_good_prob = self.rock_probs[rock.loc][Observation.GOOD_ROCK]
+                # TODO(Omer) - fix expected utility
                 expected_utility_from_rock = -1 #(rock_good_prob * 10 - dist*0.1) + (dist*0.1 - (1 - rock_good_prob) * 2)
                 rock_scores.append(expected_utility_from_rock)
 
@@ -42,15 +43,23 @@ class BaysianBeliefAgent(Agent):
         if last_action.action_type == Actions.SAMPLE:
             rock_prob = self.rock_probs[last_action.rock_sample_loc]
             if history_step.observation == Observation.GOOD_ROCK:
-                good_rock_prob = rock_prob[Observation.GOOD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK) + \
-                                 rock_prob[Observation.BAD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
+                likelihood = state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK)
+                likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[Observation.GOOD_ROCK]
+                likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[Observation.BAD_ROCK]
+                posterior_good_rock_given_good_observation = likelihood_of_good_observation_from_a_good_rock / \
+                                                             (likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
+                good_rock_prob = posterior_good_rock_given_good_observation
                 bad_rock_prob = 1 - good_rock_prob
 
             else:
                 # todo - change this to calc_good_sample_prob?
-                bad_rock_prob = rock_prob[Observation.GOOD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK) + \
-                                rock_prob[Observation.BAD_ROCK] * state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
-                good_rock_prob = 1 - bad_rock_prob
+                likelihood = state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
+                likelihood_of_bad_observation_from_a_good_rock = likelihood[0] * rock_prob[Observation.GOOD_ROCK]
+                likelihood_of_bad_observation_from_a_bad_rock = likelihood[1] * rock_prob[Observation.BAD_ROCK]
+                posterior_good_rock_given_bad_observation = likelihood_of_bad_observation_from_a_good_rock / \
+                                                             (likelihood_of_bad_observation_from_a_bad_rock + likelihood_of_bad_observation_from_a_bad_rock)
+                good_rock_prob = posterior_good_rock_given_bad_observation
+                bad_rock_prob = 1 - good_rock_prob
 
             self.rock_probs[last_action.rock_sample_loc] = {Observation.GOOD_ROCK: good_rock_prob,
                                                             Observation.BAD_ROCK: bad_rock_prob}
