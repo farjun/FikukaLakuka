@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 
 from config import config
@@ -16,7 +18,7 @@ class BaysianBeliefAgent(Agent):
         self.rock_probs = dict((tuple(x), {Observation.GOOD_ROCK: 0.5, Observation.BAD_ROCK: 0.5}) for x in rocks)
         self.data_api = DataApi()
 
-    def act(self, state: IState, history: History) -> int:
+    def act(self, state: IState, history: History) -> Action:
         if not state.rocks_set:
             return self.go_to_exit(state)
         rock_dists = self.get_rock_distances(state)
@@ -34,7 +36,7 @@ class BaysianBeliefAgent(Agent):
 
         return Action(action_type=self.go_towards(state, state.rocks[max_score_rock_idx].loc))
 
-    def update(self, state: IState, reward: float, history: History):
+    def update(self, state: IState, reward: float, history: History)->List[float]:
         history_step = history.past[-1]
         last_action = history_step.action
         if last_action.action_type == Actions.SAMPLE:
@@ -55,3 +57,12 @@ class BaysianBeliefAgent(Agent):
 
         rock_probs_sorted = [tuple(self.rock_probs[r].values()) for r in state.rocks_arr]
         self.data_api.write_agent_state("bbu", history.cur_step(), np.asarray(rock_probs_sorted))
+        return self.get_rock_beliefs(state)
+
+
+    def get_rock_beliefs(self, state: IState)->List[float]:
+        beliefs = list()
+        for rock in state.rocks:
+            rock_beliefs = self.rock_probs[rock.loc]
+            beliefs.extend([rock_beliefs[Observation.GOOD_ROCK], rock_beliefs[Observation.BAD_ROCK]])
+        return beliefs
