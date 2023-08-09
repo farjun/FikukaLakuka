@@ -14,7 +14,7 @@ class RockTile(BaseModel):
     loc: Tuple[int,int]
     ui_loc: int
     reward: float
-    picked = False
+    picked: bool = False
 
 
 class IState:

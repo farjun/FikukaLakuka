@@ -28,10 +28,11 @@ class BaysianBeliefAgent(Agent):
                 rock_scores.append(-10)
             else:
                 rock_good_prob = self.rock_probs[rock.loc][Observation.GOOD_ROCK]
-                rock_scores.append(rock_good_prob - dist*0.1)
+                expected_utility_from_rock = -1 #(rock_good_prob * 10 - dist*0.1) + (dist*0.1 - (1 - rock_good_prob) * 2)
+                rock_scores.append(expected_utility_from_rock)
 
         max_score_rock_idx = rock_scores.index(max(rock_scores))
-        if rock_scores[max_score_rock_idx] < 0.5:
+        if rock_scores[max_score_rock_idx] < 0.0:
             return Action(action_type=Actions.SAMPLE, rock_sample_loc=state.rocks[max_score_rock_idx].loc)
 
         return Action(action_type=self.go_towards(state, state.rocks[max_score_rock_idx].loc))
