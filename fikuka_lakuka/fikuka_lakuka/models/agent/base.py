@@ -15,7 +15,7 @@ class Agent(abc.ABC):
     def act(self, state: IState, history: History)->Action:
         pass
 
-    def update(self, state: IState, reward: float, last_action: Action, history: History)->List[float]:
+    def update(self, state: IState, reward: float, last_action: Action, observation, history: History)->List[float]:
         return []
 
     def calc_rock_distances(self, state: IState):

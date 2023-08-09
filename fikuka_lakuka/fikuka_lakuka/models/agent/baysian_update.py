@@ -29,20 +29,22 @@ class BaysianBeliefAgent(Agent):
             else:
                 rock_good_prob = self.rock_probs[rock.loc][Observation.GOOD_ROCK]
                 # TODO(Omer) - fix expected utility
-                expected_utility_from_rock = -1 #(rock_good_prob * 10 - dist*0.1) + (dist*0.1 - (1 - rock_good_prob) * 2)
+                # Expected utility: P(Rock is good) * R(Rock is good) + P(Rock is bad) * R(Rock is bad)
+                expected_utility_from_rock = rock_good_prob * (10 - dist * 0.1) + (1 - rock_good_prob) * (-2 - dist * 0.1)
                 rock_scores.append(expected_utility_from_rock)
 
         max_score_rock_idx = rock_scores.index(max(rock_scores))
-        if rock_scores[max_score_rock_idx] < 0.0:
+        # Decide if you should sample a rock
+        if rock_scores[max_score_rock_idx] < 5.0:
             return Action(action_type=Actions.SAMPLE, rock_sample_loc=state.rocks[max_score_rock_idx].loc)
 
         return Action(action_type=self.go_towards(state, state.rocks[max_score_rock_idx].loc))
 
-    def update(self, state: IState, reward: float,last_action: Action, history: History)->List[float]:
+    def update(self, state: IState, reward: float, last_action: Action, observation, history: History) -> List[float]:
         history_step = history.past[-1]
         if last_action.action_type == Actions.SAMPLE:
             rock_prob = self.rock_probs[last_action.rock_sample_loc]
-            if history_step.observation == Observation.GOOD_ROCK:
+            if observation == Observation.GOOD_ROCK:
                 likelihood = state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.GOOD_ROCK)
                 likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[Observation.GOOD_ROCK]
                 likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[Observation.BAD_ROCK]
