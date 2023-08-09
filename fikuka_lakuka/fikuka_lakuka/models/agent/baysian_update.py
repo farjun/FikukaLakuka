@@ -36,9 +36,8 @@ class BaysianBeliefAgent(Agent):
 
         return Action(action_type=self.go_towards(state, state.rocks[max_score_rock_idx].loc))
 
-    def update(self, state: IState, reward: float, history: History)->List[float]:
+    def update(self, state: IState, reward: float,last_action: Action, history: History)->List[float]:
         history_step = history.past[-1]
-        last_action = history_step.action
         if last_action.action_type == Actions.SAMPLE:
             rock_prob = self.rock_probs[last_action.rock_sample_loc]
             if history_step.observation == Observation.GOOD_ROCK:
