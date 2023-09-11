@@ -81,6 +81,12 @@ class DataApi:
         cur.close()
         return res
 
+    def get_all_from_table(self, agent:str, step: int):
+        cur = self._db_con.cursor()
+        res = cur.execute(f"select * from agent_{agent} where step={step})  ")
+        cur.close()
+        return res
+
     def get_all_states(self, agent: str, flatten_states= False)->Tuple[int, np.array, str]:
         cur = self._db_con.cursor()
         res = cur.execute(f"select * from agent_{agent} order by step asc").fetchall()

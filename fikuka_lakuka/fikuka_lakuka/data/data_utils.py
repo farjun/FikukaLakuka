@@ -16,6 +16,9 @@ class DataUtils:
         state = self.data_api.get_all_states(agent, flatten_states=True)
         return LLE.fit_transform(state)
 
+    def load_table_as_df(self, table_name):
+        self.data_api
+
 
 def run_state_clustering():
     data_api = DataApi()
