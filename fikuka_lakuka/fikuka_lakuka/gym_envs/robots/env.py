@@ -35,8 +35,8 @@ class RobotsEnv_v0(gym.Env):
         assert action in self.action_space
         action = self.cur_agent.act(self.state, self.history)
         reward, done, observation = self.state.update(self.state.cur_agent_idx, action)
-        self.history.update(self.state.cur_agent_idx, action, observation, reward,  self.state.agent_locations())
-        self.cur_agent.update(self.state, reward, self.history)
+        agent_beliefs = self.cur_agent.update(self.state, reward, action, observation, self.history)
+        self.history.update(self.state.cur_agent_idx, action, observation, reward,  self.state.agent_locations(), agent_beliefs)
         self.state.next_agent()
         return self.state.board, reward, done, {"info": "some info"}
 

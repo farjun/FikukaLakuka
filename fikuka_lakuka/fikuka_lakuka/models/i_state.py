@@ -1,6 +1,6 @@
 import random
 from collections import defaultdict
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 import gym
 import numpy as np
@@ -14,7 +14,10 @@ class RockTile(BaseModel):
     loc: Tuple[int,int]
     ui_loc: int
     reward: float
-    picked = False
+    picked: bool = False
+
+    def is_good(self):
+        return self.reward > 0
 
 
 class IState:
@@ -33,15 +36,19 @@ class IState:
 
         agents = config.get_in_game_context("playing_agents")
         rocks_reward_arr = config.get_in_game_context("environment", "rocks_reward")
+
         self.rocks_arr = [tuple(x) for x in config.get_in_game_context("environment", "rocks")]
         self.rocks: List[RockTile] = [RockTile(loc=loc,ui_loc=loc[0]*self.grid_size[0] + loc[1], reward=reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr)]
-        self.rocks_arr_ui = [loc[0]*self.grid_size[0] + loc[1] for loc in self.rocks_arr]
+        self.rocks_by_loc: Dict[Tuple[int, int],RockTile] = dict((tuple(loc), rock) for loc, rock in zip(self.rocks_arr, self.rocks))
+
         self.rocks_set = set(tuple(x) for x in self.rocks_arr)
         self.rocks_rewards = dict((tuple(loc), reward) for loc, reward in zip(self.rocks_arr, rocks_reward_arr))
         self.collected_rocks = [False]*len(self.rocks_arr)
 
         self.start_pt = config.get_in_game_context("environment", "start")
         self.end_pt = config.get_in_game_context("environment", "end")
+        self.sample_prob = config.get_in_game_context("environment", "sample_prob")
+
         assert len(self.grid_size) == 2, "only 2d grid is supported.. common..."
         self._board = np.zeros(self.grid_size, dtype=int)
         self._agent_locations = [self.start_pt.copy() for agent in agents]
@@ -65,24 +72,40 @@ class IState:
     def next_agent(self):
         self._cur_agent_idx = (self._cur_agent_idx + 1) % self.num_of_agents
 
-    def sample_rock(self, rock_loc: Tuple[int, int]):
-        return random.sample([Observation.BAD_ROCK, Observation.GOOD_ROCK],1)[0]
+    def sample_rock(self, agent, rock_loc: Tuple[int, int]):
+        agnet_location = self._agent_locations[agent]
+        dist = abs(agnet_location[0] - rock_loc[0]) + abs(agnet_location[1] - rock_loc[1])
+        p = self.calc_sample_prob(dist)
+        rock = self.rocks_by_loc[rock_loc]
+        if rock.is_good():
+            good_rock_prob, bad_rock_prob = p, 1-p
+        else:
+            good_rock_prob, bad_rock_prob = 1-p, p
 
-    def calc_good_sample_prob(self, rock_loc: Tuple[int, int], given_that_rock: Observation)->float:
+        return np.random.choice([Observation.BAD_ROCK, Observation.GOOD_ROCK],1,p=[bad_rock_prob, good_rock_prob])[0]
+
+    def calc_good_sample_prob(self, rock_loc: Tuple[int, int], observation: Observation)->(float,float):
         location = self.cur_agent_location()
-        sample_prob = config.get_in_game_context("environment", "sample_prob")
-        manhetten_dist = abs(location[0] - rock_loc[0]) + abs(location[1] - rock_loc[1])
-        if given_that_rock == Observation.GOOD_ROCK:
-            return 1/manhetten_dist * sample_prob
+        # sensor quality
+        # distance to rock
+        distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
+        # measurement error function
+        sample_prob_with_distance = self.calc_sample_prob(distance_to_rock)
+        if observation == Observation.GOOD_ROCK:
+            return sample_prob_with_distance, 1-sample_prob_with_distance
+        if observation == Observation.BAD_ROCK:
+            return 1 - sample_prob_with_distance, sample_prob_with_distance
 
-        elif given_that_rock == Observation.BAD_ROCK:
-            return 1 - (1 / manhetten_dist * sample_prob)
+    def calc_sample_prob(self, distance_to_rock):
+        distance_to_rock /= 3
+        return 1/2 * (1 + np.exp(-distance_to_rock * np.log(2) / self.sample_prob))
+
     def update(self, agent: int, action: Action)->Tuple[float, bool, Observation]:
         if self._agent_locations[agent] == self.end_pt:
             return 10, True, Observation.NO_OBS
 
         if action.action_type == Actions.SAMPLE:
-            return 0, False, self.sample_rock(action.rock_sample_loc)
+            return 0, False, self.sample_rock(agent, action.rock_sample_loc)
 
         reward = -self.gas_fee
         # update location

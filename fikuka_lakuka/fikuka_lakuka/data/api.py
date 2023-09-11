@@ -50,7 +50,7 @@ class DataApi:
                 cur.execute(f"drop table if exists agent_{agent}")
 
         print(f"Running - create tables if not exists")
-        cur.execute(f"create table if not exists history (step int, cur_agent int, action string, observation string, agents_locations string)")
+        cur.execute(f"create table if not exists history (step int, cur_agent int, action string, observation string, agents_locations string, agent_beliefs array)")
         for agent in self.agents:
             cur.execute(f"create table if not exists agent_{agent} (step int, agent_state array, clustered_state string)")
 
@@ -63,7 +63,7 @@ class DataApi:
     def write_history(self, history: History):
         cur = self._db_con.cursor()
         for i, step in enumerate(history.to_db_obj()):
-            cur.execute("insert into history (step, cur_agent, action, observation, agents_locations) values (?,?,?,?,?)",
+            cur.execute("insert into history (step, cur_agent, action, observation, agents_locations, agent_beliefs) values (?,?,?,?,?,?)",
                         (i, *step))
         self._db_con.commit()
         cur.close()
@@ -76,6 +76,12 @@ class DataApi:
         cur.close()
 
     def get_state(self, agent:str, step: int):
+        cur = self._db_con.cursor()
+        res = cur.execute(f"select * from agent_{agent} where step={step})  ")
+        cur.close()
+        return res
+
+    def get_all_from_table(self, agent:str, step: int):
         cur = self._db_con.cursor()
         res = cur.execute(f"select * from agent_{agent} where step={step})  ")
         cur.close()

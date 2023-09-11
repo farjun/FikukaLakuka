@@ -15,8 +15,8 @@ class Agent(abc.ABC):
     def act(self, state: IState, history: History)->Action:
         pass
 
-    def update(self, state: IState, reward: float, history: History):
-        pass
+    def update(self, state: IState, reward: float, last_action: Action, observation, history: History)->List[float]:
+        return []
 
     def calc_rock_distances(self, state: IState):
         return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1)
@@ -49,3 +49,4 @@ class Agent(abc.ABC):
             dists.append(abs(agnet_location[0] -rock.loc[0]) + abs(agnet_location[1] -rock.loc[1]))
 
         return dists
+
