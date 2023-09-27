@@ -23,6 +23,7 @@ class BaysianBeliefAgent(Agent):
     def act(self, state: IState, history: History) -> Action:
         if not state.rocks_set:
             return self.go_to_exit(state)
+        tracks = self.calc_tracks_distances(state)
         rock_dists = self.get_rock_distances(state)
         rock_scores = list()
         for i, (dist, rock) in enumerate(zip(rock_dists, state.rocks)):

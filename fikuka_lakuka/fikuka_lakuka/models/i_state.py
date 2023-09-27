@@ -148,7 +148,11 @@ class IState:
     def cur_agent_location(self)->Tuple[int, int]:
         return self.get_agent_location(self._cur_agent_idx)
 
-    def agent_locations(self)->Tuple[int, int]:
+    def agent_locations(self, cur_agent_first = False)->Tuple[int, int]:
+        if cur_agent_first:
+            res = self._agent_locations.copy()
+            cur_agnt_loc = res.pop(self.cur_agent_idx)
+            return [cur_agnt_loc] + res
         return self._agent_locations
 
     def cur_agent_ui_location(self)->int:
