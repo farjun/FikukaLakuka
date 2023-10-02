@@ -1,7 +1,7 @@
 
 general:
   db_name: run_1
-  game_to_run: robots
+  game_to_run: robots2
 
 
 games:
@@ -24,6 +24,25 @@ games:
       end: [9,9]
       starting_agent: 0
 
+  robots2:
+    seed: 101
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 500
+    playing_agents:
+      - bbu
+      - random
+    environment:
+      sample_prob: 0.9
+      gas_fee: 0.1
+      grid_size: [30,30]
+      rocks: [[2,2], [4,5], [3,3], [20,20], [15,15], [29,29]]
+      rocks_reward: [-10, 10, 10, 10,15,15]
+      start: [0,0]
+      end: [9,9]
+      starting_agent: 0
+
 agents:
   robots:
     PPOtest:
@@ -35,6 +54,15 @@ agents:
     bbu:
       name: bbu
 
+  robots2:
+    PPOtest:
+      name : PPOtest
+    random:
+      name: random
+    algo:
+      name: algo
+    bbu:
+      name: bbu
 
 assets:
 

@@ -9,6 +9,8 @@ from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Actions, Obs
 from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
 
+def norm_mat(x:np.ndarray)->np.ndarray:
+    return x + np.abs(np.min(x))
 
 class BaysianBeliefAgent(Agent):
 
@@ -20,30 +22,22 @@ class BaysianBeliefAgent(Agent):
         self.sample_count = [1] * len(rocks)
         self.data_api = DataApi()
 
+    def get_graph_matrix(self, state: IState)->np.ndarray:
+        graph_matrix = super().get_graph_matrix(state)
+        state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
+        for rock, i in zip(state_rocks_arr_not_picked, range(1,graph_matrix.shape[1]-1)):
+            graph_matrix[:,i] -= self.rock_probs[rock][Observation.GOOD_ROCK]*10
+
+        return norm_mat(graph_matrix)
+
     def act(self, state: IState, history: History) -> Action:
         if not state.rocks_set:
             return self.go_to_exit(state)
-        tracks = self.calc_tracks_distances(state)
-        rock_dists = self.get_rock_distances(state)
-        rock_scores = list()
-        for i, (dist, rock) in enumerate(zip(rock_dists, state.rocks)):
-            if rock.picked:
-                rock_scores.append(0)
-            else:
-                rock_good_prob = self.rock_probs[rock.loc][Observation.GOOD_ROCK]
-                rock_bad_prob = self.rock_probs[rock.loc][Observation.BAD_ROCK]
-                # Expected utility: P(Rock is good) * R(Rock is good) + P(Rock is bad) * R(Rock is bad)
-                expected_utility_from_rock = rock_good_prob * 10 + rock_bad_prob * -10 + self.gas_fee * dist
-                rock_exploration_bonus = np.sqrt(np.log(np.sum(self.sample_count)) / self.sample_count[i]) / 2
-                rock_scores.append(expected_utility_from_rock + rock_exploration_bonus)
+        graph_matrix = self.get_graph_matrix(state)
+        tracks = self.calc_dijkstra_distance(graph_matrix)
 
-        max_score_rock_idx = rock_scores.index(max(rock_scores))
-        # Decide if you should sample a rock
-        if rock_scores[max_score_rock_idx] < 5.0:
-            self.sample_count[max_score_rock_idx] += 1
-            return Action(action_type=Actions.SAMPLE, rock_sample_loc=state.rocks[max_score_rock_idx].loc)
-
-        return Action(action_type=self.go_towards(state, state.rocks[max_score_rock_idx].loc))
+        state_rocks_arr_not_picked = [r for r in state.rocks if r.loc in state.rocks_set]
+        return Action(action_type=self.go_towards(state, state_rocks_arr_not_picked[tracks[0]].loc))
 
     def update(self, state: IState, reward: float, last_action: Action, observation, history: History) -> List[float]:
         if not history.past:

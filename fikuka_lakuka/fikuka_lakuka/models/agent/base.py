@@ -23,18 +23,21 @@ class Agent(abc.ABC):
     def calc_rock_distances(self, state: IState):
         return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1)
 
-    def calc_tracks_distances(self, state: IState):
-        graph_nodes_num = len(state.rocks_arr) + 2
-        graph_matrix = np.zeros((graph_nodes_num, graph_nodes_num))
-        locations = [state.cur_agent_location()] + state.rocks_arr + [state.end_pt]
-        for i, loc in enumerate(locations):
-            graph_matrix[i,:] = np.array(cdist([loc], locations, metric='cityblock')[0])
-
+    def calc_dijkstra_distance(self, graph_matrix: np.array):
         csr_graph_matrix = csr_matrix(graph_matrix)
         dist_matrix, predecessors, sources = dijkstra(csgraph=csr_graph_matrix, return_predecessors=True, indices=0, directed=False, min_only=True)
 
-        return predecessors
+        return sources
 
+    def get_graph_matrix(self, state: IState)->np.ndarray:
+        state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
+        graph_nodes_num = len(state_rocks_arr_not_picked) + 2
+        graph_matrix = np.zeros((graph_nodes_num, graph_nodes_num))
+        locations = [state.cur_agent_location()] + state_rocks_arr_not_picked + [state.end_pt]
+        for i, loc in enumerate(locations):
+            graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
+
+        return graph_matrix
 
     def go_to_exit(self, state):
         return Action(action_type=self.go_towards(state, state.end_pt))
