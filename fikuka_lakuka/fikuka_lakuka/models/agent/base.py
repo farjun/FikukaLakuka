@@ -3,7 +3,7 @@ from abc import abstractmethod
 from typing import Tuple, List
 from scipy.sparse import csr_matrix
 import numpy as np
-from scipy.sparse.csgraph import dijkstra
+from scipy.sparse.csgraph import dijkstra, shortest_path
 from scipy.spatial.distance import euclidean, cdist
 
 from fikuka_lakuka.fikuka_lakuka.models import History, ActionSpace
@@ -25,9 +25,9 @@ class Agent(abc.ABC):
 
     def calc_dijkstra_distance(self, graph_matrix: np.array):
         csr_graph_matrix = csr_matrix(graph_matrix)
-        dist_matrix, predecessors, sources = dijkstra(csgraph=csr_graph_matrix, return_predecessors=True, indices=0, directed=False, min_only=True)
+        dist_matrix, predecessors = shortest_path(csgraph=csr_graph_matrix, return_predecessors=True, indices=0, directed=False)
 
-        return sources
+        return predecessors
 
     def get_graph_matrix(self, state: IState)->np.ndarray:
         state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
@@ -36,7 +36,6 @@ class Agent(abc.ABC):
         locations = [state.cur_agent_location()] + state_rocks_arr_not_picked + [state.end_pt]
         for i, loc in enumerate(locations):
             graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
-
         return graph_matrix
 
     def go_to_exit(self, state):

@@ -1,7 +1,7 @@
 
 general:
   db_name: run_1
-  game_to_run: robots2
+  game_to_run: robots
 
 
 games:
@@ -36,11 +36,11 @@ games:
     environment:
       sample_prob: 0.9
       gas_fee: 0.1
-      grid_size: [30,30]
-      rocks: [[2,2], [4,5], [3,3], [20,20], [15,15], [29,29]]
+      grid_size: [15,15]
+      rocks: [[2,2], [3,3], [4,5], [13,14]]
       rocks_reward: [-10, 10, 10, 10,15,15]
       start: [0,0]
-      end: [9,9]
+      end: [14,14]
       starting_agent: 0
 
 agents:

@@ -35,8 +35,9 @@ class BaysianBeliefAgent(Agent):
             return self.go_to_exit(state)
         graph_matrix = self.get_graph_matrix(state)
         tracks = self.calc_dijkstra_distance(graph_matrix)
-
         state_rocks_arr_not_picked = [r for r in state.rocks if r.loc in state.rocks_set]
+
+
         return Action(action_type=self.go_towards(state, state_rocks_arr_not_picked[tracks[0]].loc))
 
     def update(self, state: IState, reward: float, last_action: Action, observation, history: History) -> List[float]:

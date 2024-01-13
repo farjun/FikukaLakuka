@@ -25,3 +25,6 @@ def run_state_clustering():
     du = DataUtils(data_api)
     clustered_states = du.cluster_states("bbu")
     plot_3d_data(clustered_states, "baysian update states")
+
+if __name__ == '__main__':
+    run_state_clustering()
