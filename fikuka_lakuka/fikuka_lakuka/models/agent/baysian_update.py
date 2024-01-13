@@ -10,7 +10,8 @@ from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
 
 def norm_mat(x:np.ndarray)->np.ndarray:
-    return x + np.abs(np.min(x))
+    x = x + np.abs(np.min(x))
+    return x
 
 class BaysianBeliefAgent(Agent):
 
@@ -28,16 +29,18 @@ class BaysianBeliefAgent(Agent):
         for rock, i in zip(state_rocks_arr_not_picked, range(1,graph_matrix.shape[1]-1)):
             graph_matrix[:,i] -= self.rock_probs[rock][Observation.GOOD_ROCK]*10
 
-        return norm_mat(graph_matrix)
+        normed_mat = norm_mat(graph_matrix)
+        normed_mat[:, 0] = 0
+        normed_mat[-1, :] = 0
+
+        return normed_mat
 
     def act(self, state: IState, history: History) -> Action:
         if not state.rocks_set:
             return self.go_to_exit(state)
         graph_matrix = self.get_graph_matrix(state)
-        tracks = self.calc_dijkstra_distance(graph_matrix)
+        dist_matrix, predecessors = self.calc_dijkstra_distance(graph_matrix)
         state_rocks_arr_not_picked = [r for r in state.rocks if r.loc in state.rocks_set]
-
-
         return Action(action_type=self.go_towards(state, state_rocks_arr_not_picked[tracks[0]].loc))
 
     def update(self, state: IState, reward: float, last_action: Action, observation, history: History) -> List[float]:

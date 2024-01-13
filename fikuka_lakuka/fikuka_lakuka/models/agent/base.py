@@ -25,8 +25,7 @@ class Agent(abc.ABC):
 
     def calc_dijkstra_distance(self, graph_matrix: np.array):
         csr_graph_matrix = csr_matrix(graph_matrix)
-        dist_matrix, predecessors = shortest_path(csgraph=csr_graph_matrix, return_predecessors=True, indices=0, directed=False)
-
+        dist_matrix, predecessors = shortest_path(csgraph=csr_graph_matrix, return_predecessors=True, indices=0)
         return predecessors
 
     def get_graph_matrix(self, state: IState)->np.ndarray:
@@ -36,6 +35,7 @@ class Agent(abc.ABC):
         locations = [state.cur_agent_location()] + state_rocks_arr_not_picked + [state.end_pt]
         for i, loc in enumerate(locations):
             graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
+
         return graph_matrix
 
     def go_to_exit(self, state):
