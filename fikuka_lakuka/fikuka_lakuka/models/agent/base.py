@@ -1,34 +1,38 @@
 import abc
 from abc import abstractmethod
 from typing import Tuple, List
-from scipy.sparse import csr_matrix
-import numpy as np
-from scipy.sparse.csgraph import dijkstra, shortest_path
-from scipy.spatial.distance import euclidean, cdist
 
-from fikuka_lakuka.fikuka_lakuka.models import History, ActionSpace
-from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
+import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import shortest_path
+from scipy.spatial.distance import cdist
+
+from fikuka_lakuka.fikuka_lakuka.models import History
 from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Actions
-from config import config
+from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
+
 
 class Agent(abc.ABC):
 
     @abstractmethod
-    def act(self, state: IState, history: History)->Action:
+    def act(self, state: IState, history: History) -> Action:
         pass
 
-    def update(self, state: IState, reward: float, last_action: Action, observation, history: History)->List[float]:
+    def update(self, state: IState, reward: float, last_action: Action, observation, history: History) -> List[float]:
         return []
 
     def calc_rock_distances(self, state: IState):
-        return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1)
+        return np.linalg.norm(np.asarray(state.rocks_arr) - state.cur_agent_location(), axis=1, ord=1)
+
+    def calc_distance(self, state, loc: Tuple[int, int]) -> np.float64:
+        return np.linalg.norm(np.asarray(loc) - state.cur_agent_location(), ord=1)
 
     def calc_dijkstra_distance(self, graph_matrix: np.array):
         csr_graph_matrix = csr_matrix(graph_matrix)
         dist_matrix, predecessors = shortest_path(csgraph=csr_graph_matrix, return_predecessors=True, indices=0)
-        return predecessors
+        return dist_matrix, predecessors
 
-    def get_graph_matrix(self, state: IState)->np.ndarray:
+    def get_graph_matrix(self, state: IState) -> np.ndarray:
         state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
         graph_nodes_num = len(state_rocks_arr_not_picked) + 2
         graph_matrix = np.zeros((graph_nodes_num, graph_nodes_num))
@@ -41,7 +45,7 @@ class Agent(abc.ABC):
     def go_to_exit(self, state):
         return Action(action_type=self.go_towards(state, state.end_pt))
 
-    def go_towards(self, state: IState, target: np.ndarray)->Actions:
+    def go_towards(self, state: IState, target: np.ndarray) -> Actions:
         cur_loc = state.cur_agent_location()
         if target[0] != cur_loc[0]:
             if target[0] > cur_loc[0]:
@@ -59,11 +63,10 @@ class Agent(abc.ABC):
 
         return None
 
-    def get_rock_distances(self, state: IState)->List[int]:
+    def get_rock_distances(self, state: IState) -> List[int]:
         dists = list()
         for rock in state.rocks:
             agnet_location = state.cur_agent_location()
-            dists.append(abs(agnet_location[0] -rock.loc[0]) + abs(agnet_location[1] -rock.loc[1]))
+            dists.append(abs(agnet_location[0] - rock.loc[0]) + abs(agnet_location[1] - rock.loc[1]))
 
         return dists
-

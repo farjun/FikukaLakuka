@@ -27,7 +27,7 @@ class BaysianBeliefAgent(Agent):
         graph_matrix = super().get_graph_matrix(state)
         state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
         for rock, i in zip(state_rocks_arr_not_picked, range(1,graph_matrix.shape[1]-1)):
-            graph_matrix[:,i] -= self.rock_probs[rock][Observation.GOOD_ROCK]*10
+            graph_matrix[:,i] -= np.tan(self.rock_probs[rock][Observation.GOOD_ROCK]-0.5)*20
 
         normed_mat = norm_mat(graph_matrix)
         normed_mat[:, 0] = 0
@@ -40,8 +40,14 @@ class BaysianBeliefAgent(Agent):
             return self.go_to_exit(state)
         graph_matrix = self.get_graph_matrix(state)
         dist_matrix, predecessors = self.calc_dijkstra_distance(graph_matrix)
+        next_best_idx = np.argmin(dist_matrix[1:])
+        next_best_idx_score = dist_matrix[next_best_idx+1]
         state_rocks_arr_not_picked = [r for r in state.rocks if r.loc in state.rocks_set]
-        return Action(action_type=self.go_towards(state, state_rocks_arr_not_picked[tracks[0]].loc))
+        target_loc = state_rocks_arr_not_picked[next_best_idx].loc
+        if next_best_idx_score >= 4:
+            return Action(action_type=Actions.SAMPLE,rock_sample_loc = target_loc)
+
+        return Action(action_type=self.go_towards(state, target_loc))
 
     def update(self, state: IState, reward: float, last_action: Action, observation, history: History) -> List[float]:
         if not history.past:
