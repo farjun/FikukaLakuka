@@ -10,10 +10,14 @@ from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
 
 def norm_mat(x:np.ndarray)->np.ndarray:
-    x = x + np.abs(np.min(x))
-    return x
+    norm_factor = np.abs(np.min(x))
+    x = x + norm_factor
+    x[:, 0] = 0
+    x[-1, :] = 0
+    return x, norm_factor
 
 class BaysianBeliefAgent(Agent):
+
 
     def __init__(self, config_params: dict):
         self.config_params = config_params
@@ -26,26 +30,24 @@ class BaysianBeliefAgent(Agent):
     def get_graph_matrix(self, state: IState)->np.ndarray:
         graph_matrix = super().get_graph_matrix(state)
         state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
-        for rock, i in zip(state_rocks_arr_not_picked, range(1,graph_matrix.shape[1]-1)):
+        for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1]-1)):
             graph_matrix[:,i] -= np.tan(self.rock_probs[rock][Observation.GOOD_ROCK]-0.5)*20
 
-        normed_mat = norm_mat(graph_matrix)
-        normed_mat[:, 0] = 0
-        normed_mat[-1, :] = 0
+        normed_mat, norm_factor = norm_mat(graph_matrix)
 
-        return normed_mat
+        return normed_mat, norm_factor
 
     def act(self, state: IState, history: History) -> Action:
         if not state.rocks_set:
             return self.go_to_exit(state)
-        graph_matrix = self.get_graph_matrix(state)
+        graph_matrix, norm_factor = self.get_graph_matrix(state)
         dist_matrix, predecessors = self.calc_dijkstra_distance(graph_matrix)
         next_best_idx = np.argmin(dist_matrix[1:])
         next_best_idx_score = dist_matrix[next_best_idx+1]
-        state_rocks_arr_not_picked = [r for r in state.rocks if r.loc in state.rocks_set]
-        target_loc = state_rocks_arr_not_picked[next_best_idx].loc
-        if next_best_idx_score >= 4:
-            return Action(action_type=Actions.SAMPLE,rock_sample_loc = target_loc)
+        state_rocks_arr_not_picked = [r.loc for r in state.rocks if r.loc in state.rocks_set] + [state.end_pt]
+        target_loc = state_rocks_arr_not_picked[next_best_idx]
+        if next_best_idx_score >= norm_factor and target_loc != state.end_pt:
+            return Action(action_type=Actions.SAMPLE, rock_sample_loc = target_loc)
 
         return Action(action_type=self.go_towards(state, target_loc))
 
@@ -66,7 +68,7 @@ class BaysianBeliefAgent(Agent):
                 good_rock_prob = max([posterior_good_rock_given_good_observation,0])
                 bad_rock_prob = 1 - good_rock_prob
 
-            else:
+            else: # observation == Observation.BAD_ROCK
                 likelihood = state.calc_good_sample_prob(last_action.rock_sample_loc, Observation.BAD_ROCK)
                 likelihood_of_bad_observation_from_a_good_rock = likelihood[0] * rock_prob[Observation.GOOD_ROCK]
                 likelihood_of_bad_observation_from_a_bad_rock = likelihood[1] * rock_prob[Observation.BAD_ROCK]

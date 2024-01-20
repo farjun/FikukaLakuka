@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 from pydantic import BaseModel
@@ -8,14 +8,17 @@ from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Observation
 MAX_PLAYERS=4
 class HistoryStep(BaseModel):
     cur_agent: int
-    action: Action
-    observation: Observation
-    reward: float
+    action: Optional[Action] = None
+    observation: Optional[Observation] = None
+    reward: float = 0
     players_pos:List[List[int]]
     agent_beliefs: List[float]
 
     def to_arr(self):
-        return [self.cur_agent, self.action.action_type.name, self.observation.name, str(self.players_pos), np.array(self.agent_beliefs)]
+        action = self.action.action_type.name if self.action is not None else ""
+        action_rock_sample_loc =  str(self.action.rock_sample_loc) if self.action is not None else ""
+        observation_name = self.observation.name if self.observation is not None else ""
+        return [self.cur_agent, action, action_rock_sample_loc, observation_name, str(self.players_pos), np.array(self.agent_beliefs)]
 
     @staticmethod
     def from_arr(arr:List[int]):

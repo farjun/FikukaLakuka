@@ -4,7 +4,7 @@ from time import sleep
 
 import gym
 from fikuka_lakuka.fikuka_lakuka.data.plotting import plot_3d_data
-from fikuka_lakuka.fikuka_lakuka.data.data_utils import DataUtils
+from fikuka_lakuka.fikuka_lakuka.data.data_utils import DataUtils, graph_baysian_agents_beliefs
 from fikuka_lakuka.fikuka_lakuka.data.api import DataApi
 from fikuka_lakuka.fikuka_lakuka.gym_envs.robots.env import RobotsEnv_v0
 
@@ -53,6 +53,7 @@ def main():
 
     avg_sum_reward = sum(history) / len(history)
     print("\nbaseline cumulative reward: {:6.2}".format(avg_sum_reward))
+    graph_baysian_agents_beliefs()
 
 
 

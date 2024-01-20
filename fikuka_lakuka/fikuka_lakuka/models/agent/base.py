@@ -70,3 +70,6 @@ class Agent(abc.ABC):
             dists.append(abs(agnet_location[0] - rock.loc[0]) + abs(agnet_location[1] - rock.loc[1]))
 
         return dists
+
+    def get_rock_beliefs(self, state: IState) -> List[float]:
+        return []
