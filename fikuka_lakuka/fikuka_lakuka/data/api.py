@@ -4,9 +4,12 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
 
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models import History
+
+HISTORY_TABLE_COLMNS = ("step", "cur_agent", "action", "rock_sample_loc", "observation", "agents_locations", "agent_beliefs")
 
 DBS_FOLDER = Path(__file__).parent / "runs"
 
@@ -28,8 +31,9 @@ def convert_array(text):
 
 
 class DataApi:
-    def __init__(self, force_recreate = False):
-        self.db_path = DBS_FOLDER / config.get("general", "db_name")
+    def __init__(self, force_recreate = False, db_name: str = None):
+        self.db_name = db_name or config.get("general", "db_name")
+        self.db_path = DBS_FOLDER / f"{config.cur_game}_{self.db_name}"
         self.agents = config.get_in_game_context("playing_agents")
         self._db_con = sqlite3.connect(str(self.db_path), detect_types=sqlite3.PARSE_DECLTYPES)
 
@@ -50,7 +54,7 @@ class DataApi:
                 cur.execute(f"drop table if exists agent_{agent}")
 
         print(f"Running - create tables if not exists")
-        cur.execute(f"create table if not exists history (step int, cur_agent int, action string, observation string, agents_locations string, agent_beliefs array)")
+        cur.execute(f"create table if not exists history (step int, cur_agent int, action string, rock_sample_loc string, observation string, agents_locations string, agent_beliefs array)")
         for agent in self.agents:
             cur.execute(f"create table if not exists agent_{agent} (step int, agent_state array, clustered_state string)")
 
@@ -63,7 +67,7 @@ class DataApi:
     def write_history(self, history: History):
         cur = self._db_con.cursor()
         for i, step in enumerate(history.to_db_obj()):
-            cur.execute("insert into history (step, cur_agent, action, observation, agents_locations, agent_beliefs) values (?,?,?,?,?,?)",
+            cur.execute(f"insert into history {HISTORY_TABLE_COLMNS} values (?,?,?,?,?,?,?)",
                         (i, *step))
         self._db_con.commit()
         cur.close()
@@ -95,3 +99,15 @@ class DataApi:
 
         cur.close()
         return res
+
+    def get_history(self, agent:str = None,as_df=True):
+        cur = self._db_con.cursor()
+        agents = [it[0] for it in cur.execute("select distinct(cur_agent) from history").fetchall()]
+        agents_history = list()
+        for agent in agents:
+            res = cur.execute(f"select * from history {f'where cur_agent={agent}' if agent is not None else ''}").fetchall()
+            agents_history.append(pd.DataFrame(res, columns=HISTORY_TABLE_COLMNS))
+
+        cur.close()
+
+        return agents_history

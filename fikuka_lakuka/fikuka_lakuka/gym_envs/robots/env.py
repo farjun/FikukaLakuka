@@ -2,7 +2,7 @@ import gym
 
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
-from fikuka_lakuka.fikuka_lakuka.models.action_space import ActionSpace
+from fikuka_lakuka.fikuka_lakuka.models.action_space import ActionSpace, Action, Actions
 from fikuka_lakuka.fikuka_lakuka.models.history import History
 from fikuka_lakuka.fikuka_lakuka.models.agent import init_agent
 from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent
@@ -19,6 +19,7 @@ class RobotsEnv_v0(gym.Env):
         self.action = ActionSpace()
         self._observation_space = ObservationSpace()
         self.history = History()
+
         self._ui_renderer = None
 
         self.observation_space = self._observation_space.space
@@ -26,6 +27,9 @@ class RobotsEnv_v0(gym.Env):
         self.action_space = self.action
         self.grid_size = config.get_in_game_context("environment", "grid_size")
         self.gui = RockGui(self.state)
+
+        for i, agent in enumerate(self.agents):
+            self.history.update(i, None, None, 0,  self.state.agent_locations(), agent.get_rock_beliefs(self.state))
 
     @property
     def cur_agent(self) -> Agent:
@@ -36,7 +40,7 @@ class RobotsEnv_v0(gym.Env):
         action = self.cur_agent.act(self.state, self.history)
         reward, done, observation = self.state.update(self.state.cur_agent_idx, action)
         agent_beliefs = self.cur_agent.update(self.state, reward, action, observation, self.history)
-        self.history.update(self.state.cur_agent_idx, action, observation, reward,  self.state.agent_locations(), agent_beliefs)
+        self.history.update(self.state.cur_agent_idx, action, observation, reward,  self.state.agent_locations(), agent_beliefs.copy())
         self.state.next_agent()
         return self.state.board, reward, done, {"info": "some info"}
 

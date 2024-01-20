@@ -12,7 +12,7 @@ games:
       entry_point: fikuka_lakuka.gym.envs:RobotsEnv
       max_episode_steps: 500
     playing_agents:
-      - bbu
+      - random
       - bbu
     environment:
       sample_prob: 0.9
@@ -22,6 +22,25 @@ games:
       rocks_reward: [-10, 10, 10]
       start: [0,0]
       end: [9,9]
+      starting_agent: 0
+
+  robots2:
+    seed: 101
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 500
+    playing_agents:
+      - random
+      - bbu
+    environment:
+      sample_prob: 0.9
+      gas_fee: 0.1
+      grid_size: [15,15]
+      rocks: [[2,2], [3,3], [4,5], [13,14]]
+      rocks_reward: [-10, 10, 10, 10,-15,15]
+      start: [0,0]
+      end: [14,14]
       starting_agent: 0
 
 agents:
@@ -35,6 +54,15 @@ agents:
     bbu:
       name: bbu
 
+  robots2:
+    PPOtest:
+      name : PPOtest
+    random:
+      name: random
+    algo:
+      name: algo
+    bbu:
+      name: bbu
 
 assets:
 

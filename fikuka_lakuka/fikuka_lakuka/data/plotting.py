@@ -26,5 +26,16 @@ def plot_3d_data(vecs: List[np.array], plot_name:str):
     # Show the plot
     plt.show()
 
+def plot_2d_data(X: np.array, y_vecs: List[np.array], plot_name:str, x_label:str, y_label:str, y_labels: List[str]):
+    colors = ['red', 'blue', 'green', 'yellow', 'orange']
+    for v, c, y_label in zip(y_vecs, colors, y_labels):
+        plt.plot(X, v, color=c, label=y_label)
+
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(plot_name)
+
+    plt.show()
+
 if __name__ == '__main__':
     plot_3d_data()
