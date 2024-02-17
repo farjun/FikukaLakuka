@@ -18,17 +18,15 @@ class DataUtils:
 
     def get_history_by_agent(self):
         agents_history = self.data_api.get_history(as_df=True)
-        for agent_hist in agents_history:
-            agent_hist
         return agents_history
 
-    def load_table_as_df(self, table_name):
-        self.data_api
 
 # todo
-# belief states, rewards, check converge to truth value
-# dijstra between good rocks vs real route is the optimal efficiency distance
-# implement an oracle which intervenes as a function of cost
+# add POMCP
+# add sample quality to reward
+# implement an oracle which intervenes as a function of cost - puts 1 or 0 in the belief
+# maybe the play can address the oracle?
+# train an NN to see if the env will need a intervention (Meta oracle)
 
 # ofra and sarit kraus
 

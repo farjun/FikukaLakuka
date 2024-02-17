@@ -31,7 +31,9 @@ class BaysianBeliefAgent(Agent):
         graph_matrix = super().get_graph_matrix(state)
         state_rocks_arr_not_picked = [r for r in state.rocks_arr if r in state.rocks_set]
         for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1]-1)):
-            graph_matrix[:,i] -= np.tan(self.rock_probs[rock][Observation.GOOD_ROCK]-0.5)*20
+            graph_matrix[:,i] -= np.tan(self.rock_probs[rock][Observation.GOOD_ROCK]-0.5)*25
+
+        graph_matrix[:,-1] -= 15
 
         normed_mat, norm_factor = norm_mat(graph_matrix)
 
@@ -55,7 +57,6 @@ class BaysianBeliefAgent(Agent):
         if not history.past:
             return self.get_rock_beliefs(state)
 
-        history_step = history.past[-1]
         if last_action.action_type == Actions.SAMPLE:
             rock_prob = self.rock_probs[last_action.rock_sample_loc]
             if observation == Observation.GOOD_ROCK:
@@ -63,8 +64,7 @@ class BaysianBeliefAgent(Agent):
                 likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[Observation.GOOD_ROCK]
                 likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[Observation.BAD_ROCK]
                 posterior_good_rock_given_good_observation = likelihood_of_good_observation_from_a_good_rock / \
-                                                             (
-                                                                         likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
+                                                             (likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
                 good_rock_prob = max([posterior_good_rock_given_good_observation,0])
                 bad_rock_prob = 1 - good_rock_prob
 
@@ -92,3 +92,8 @@ class BaysianBeliefAgent(Agent):
             rock_beliefs = self.rock_probs[rock.loc]
             beliefs.extend([rock_beliefs[Observation.GOOD_ROCK], rock_beliefs[Observation.BAD_ROCK]])
         return beliefs
+
+# implement both offline and online
+# add offline calc for resilience factor
+#
+

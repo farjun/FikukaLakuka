@@ -105,9 +105,11 @@ class RockGui(GridGui):
                 img=self.assets["_DOOR"])
         for i, rock in enumerate(state.rocks):
             if rock.picked:
-                color = pygame.Color('red')
+                color = pygame.Color('white')
+            elif rock.reward > 0:
+                color = pygame.Color('green')
             else:
-                color = pygame.Color('blue')
+                color = pygame.Color('red')
 
             self.board[rock.ui_loc].draw(img=self.assets["_ROCK"], color=color)
 
