@@ -4,13 +4,13 @@ from typing import Tuple, List
 
 import numpy as np
 from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import shortest_path
+from scipy.sparse.csgraph import shortest_path, dijkstra
 from scipy.spatial.distance import cdist
 
 from fikuka_lakuka.fikuka_lakuka.models import History
 from fikuka_lakuka.fikuka_lakuka.models.action_space import Action, Actions
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
-
+from dijkstar import Graph, find_path
 
 class Agent(abc.ABC):
 
@@ -30,6 +30,7 @@ class Agent(abc.ABC):
     def calc_dijkstra_distance(self, graph_matrix: np.array):
         csr_graph_matrix = csr_matrix(graph_matrix)
         dist_matrix, predecessors = shortest_path(csgraph=csr_graph_matrix, return_predecessors=True, indices=0)
+        dist_matrix, predecessors = dijkstra(csr_graph_matrix,min_only=True, return_predecessors=True)
         return dist_matrix, predecessors
 
     def get_graph_matrix(self, state: IState) -> np.ndarray:

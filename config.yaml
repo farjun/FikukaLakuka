@@ -36,7 +36,7 @@ games:
       gas_fee: 0.1
       grid_size: [15,15]
       rocks: [[0,14], [1,14], [0,13], [12,0]]
-      rocks_reward: [-10, -10, -10, 10]
+      rocks_reward: [-15, -15, -15, 15]
       start: [0,0]
       end: [14,14]
       starting_agent: 0

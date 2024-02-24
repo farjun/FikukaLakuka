@@ -54,7 +54,7 @@ class DataApi:
                 cur.execute(f"drop table if exists agent_{agent}")
 
         print(f"Running - create tables if not exists")
-        cur.execute(f"create table if not exists history (step int, cur_agent int, action string, rock_sample_loc string, observation string, agents_locations string, agent_beliefs array)")
+        cur.execute(f"create table if not exists history (step int, cur_agent int, action string, rock_sample_loc string, observation string, agents_locations string, agent_beliefs string)")
         for agent in self.agents:
             cur.execute(f"create table if not exists agent_{agent} (step int, agent_state array, clustered_state string)")
 
