@@ -1,0 +1,9 @@
+pettingzoo
+gymnasium
+pygame
+pydantic
+numpy
+sqlite3
+pandas
+sklearn
+scipy
