@@ -1,6 +1,6 @@
 import random
 from enum import Enum
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from pydantic import BaseModel
 
 from config import config
@@ -36,12 +36,18 @@ class RobotActions(Enum):
     LEFT = 2
     RIGHT = 3
     SAMPLE = 4
-
     NUM_OF_ACTIONS = 5
 
 
+class OracleActions(Enum):
+    DONT_SEND_DATA = 0
+    SEND_GOOD_ROCK = 1
+    SEND_BAD_ROCK = 2
+    NUM_OF_ACTIONS = 3
+
+
 class Action(BaseModel):
-    action_type: RobotActions
+    action_type: Union[RobotActions, OracleActions]
     rock_sample_loc: Optional[Tuple[int, int]] = None
 
     @staticmethod

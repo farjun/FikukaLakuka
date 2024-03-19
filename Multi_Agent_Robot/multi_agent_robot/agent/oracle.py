@@ -19,8 +19,18 @@ def norm_mat(x: np.ndarray) -> np.ndarray:
     return x, norm_factor
 
 
-class BayesianBeliefAgent(Agent):
-
+class BayesianBeliefOracle(Agent):
+    """
+    TODO - implement the oracle agent:
+    1. Keep track of personal beliefs about the other agents beliefs
+    2. Update beliefs based on the other agents' actions
+    3. Use the updated beliefs to make decisions, calculate approximate value of information and decide whether to send a message to the
+        other agents
+    4. Implement the act and update methods
+    5. Implement the get_rock_beliefs method
+    6. Implement the calc_good_sample_prob method
+    7. Implement the update method
+    """
     def __init__(self, config_params: dict):
         self.config_params = config_params
         rocks = config.get_in_game_context("environment", "rocks")
@@ -125,13 +135,3 @@ class BayesianBeliefAgent(Agent):
             rock_beliefs = self.rock_probs[rock.loc]
             beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
         return beliefs
-
-    def update_beliefs(self, rock_loc, is_good):
-        if is_good:
-            self.rock_probs[rock_loc] = {SampleObservation.GOOD_ROCK: 1, SampleObservation.BAD_ROCK: 0}
-        else:
-            self.rock_probs[rock_loc] = {SampleObservation.GOOD_ROCK: 0, SampleObservation.BAD_ROCK: 1}
-
-# implement both offline and online
-# add offline calc for resilience factor
-#

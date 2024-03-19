@@ -6,7 +6,7 @@ from Multi_Agent_Robot.multi_agent_robot.env.agent_action_space import AgentActi
 import numpy as np
 
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
-from Multi_Agent_Robot.multi_agent_robot.env.types import RockTile, CellType, SampleObservation, RobotActions, Action
+from Multi_Agent_Robot.multi_agent_robot.env.types import RockTile, CellType, SampleObservation, RobotActions, Action, OracleActions
 from Multi_Agent_Robot.multi_agent_robot.ui.gui import RockGui
 from config import config
 from typing import Tuple, List, Dict
@@ -124,14 +124,14 @@ class MultiAgentRobotEnv(AECEnv):
         # Set the GUI
         self.gui = RockGui(self.state)
 
-    def step(self, action: Action=None):
+    def step(self, action: Action = None):
         """
         Used to step the environment forward by one step. It takes an action for the current agent and should be used within a loop to
         where we loop through all the agents in the environment (Using AECIter).
         """
         agent_type = self.agent_types[self.agent_selection]
         if agent_type == "oracle":
-            return self.oracle_step(action)
+            return self.oracle_step(self.agent_selection)
         elif agent_type == "robot":
             return self.robot_step(self.agent_selection)
         raise ValueError("Invalid agent type")
@@ -175,6 +175,37 @@ class MultiAgentRobotEnv(AECEnv):
             self._board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
         return reward
 
+    def oracle_step(self, agent_id: int):
+        information_cost = config.get_in_game_context("environment", "information_cost")
+        agent = self.agents[agent_id]
+        action = agent.act(self.state, self.history)
+        observation, reward, done = None, 0, False
+        # TODO maybe if we want we can add a parameter to the oracle to specify which robot to update
+        if action.action_type == OracleActions.SEND_GOOD_ROCK:
+            reward -= information_cost
+            # Update robot beliefs
+            for robot in self.agents:
+                if isinstance(robot, BayesianBeliefAgent):
+                    robot.update_beliefs(action.rock_sample_loc, True)
+        elif action.action_type == OracleActions.SEND_BAD_ROCK:
+            reward -= information_cost
+            # Update robot beliefs
+            for robot in self.agents:
+                if isinstance(robot, BayesianBeliefAgent):
+                    robot.update_beliefs(action.rock_sample_loc, False)
+        elif action.action_type == OracleActions.DONT_SEND_DATA:
+            pass
+
+        agent_beliefs = agent.update(self.state, reward, action, observation, self.history)
+        # TODO maybe define this as somthing more meaningful
+        oracle_observation = SampleObservation.NO_OBS
+        self.history.update(agent_id, action, oracle_observation, reward, self._agent_locations, agent_beliefs.copy())
+
+        observation = self.state["board"], agent_beliefs
+        self.update_state()
+        truncated = False
+        return observation, reward, done, truncated, self.state
+
     @staticmethod
     def move_robot(action, agent_pos, board_x, board_y):
         if action.action_type == RobotActions.LEFT:
@@ -186,9 +217,6 @@ class MultiAgentRobotEnv(AECEnv):
         elif action.action_type == RobotActions.DOWN:
             agent_pos[0] = min([board_y - 1, agent_pos[0] + 1])
         return agent_pos
-
-    def oracle_step(self, action):
-        pass
 
     def render(self, mode='not', close=False):
         if close:
@@ -213,7 +241,8 @@ class MultiAgentRobotEnv(AECEnv):
             good_rock_prob, bad_rock_prob = p, 1 - p
         else:
             good_rock_prob, bad_rock_prob = 1 - p, p
-        sample = np.random.choice([SampleObservation.BAD_ROCK.value, SampleObservation.GOOD_ROCK.value], 1, p=[bad_rock_prob, good_rock_prob])
+        sample = np.random.choice([SampleObservation.BAD_ROCK.value, SampleObservation.GOOD_ROCK.value], 1,
+                                  p=[bad_rock_prob, good_rock_prob])
         return SampleObservation(sample[0])
 
     def calc_sample_prob(self, distance_to_rock):
