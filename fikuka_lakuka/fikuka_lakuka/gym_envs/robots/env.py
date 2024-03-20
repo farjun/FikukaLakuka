@@ -2,7 +2,7 @@ import gym
 
 from config import config
 from fikuka_lakuka.fikuka_lakuka.models.i_state import IState
-from fikuka_lakuka.fikuka_lakuka.models.action_space import ActionSpace, Action, Actions
+from fikuka_lakuka.fikuka_lakuka.models.action_space import ActionSpace
 from fikuka_lakuka.fikuka_lakuka.models.history import History
 from fikuka_lakuka.fikuka_lakuka.models.agent import init_agent
 from fikuka_lakuka.fikuka_lakuka.models.agent.base import Agent

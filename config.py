@@ -35,4 +35,4 @@ class Config(object):
         return self.get(*args, start_at=game_conf)
 
 
-config = Config(os.getenv("env", Path(__file__).parent / "config.yaml"))
+config = Config(os.getenv("config_path", Path(__file__).parent / "config.yaml"))

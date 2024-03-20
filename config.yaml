@@ -1,6 +1,6 @@
 
 general:
-  db_name: run_1
+  db_name: test
   game_to_run: robots2
 
 games:
