@@ -3,12 +3,13 @@ from abc import abstractmethod
 from typing import Tuple, List
 
 import numpy as np
+from dijkstar import Graph
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
 from scipy.spatial.distance import cdist
 
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
-from Multi_Agent_Robot.multi_agent_robot.env.types import Action, RobotActions
+from Multi_Agent_Robot.multi_agent_robot.env.types import Action, RobotActions, SampleObservation
 
 
 class Agent(abc.ABC):
@@ -42,6 +43,21 @@ class Agent(abc.ABC):
 
         return graph_matrix
 
+    def get_graph_obj(self, state) -> Graph:
+        graph = Graph()
+        graph_matrix = self.get_graph_matrix(state)
+
+        state_rocks_arr_not_picked = [loc for loc, rock in state["rocks_dict"].items() if not rock.picked]
+        for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
+            graph_matrix[:, i] -= (self.get_rock_beliefs()[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
+
+        graph_matrix[:, -1] -= 15
+
+        for i in range(graph_matrix.shape[0]):
+            for j in range(graph_matrix.shape[1]):
+                graph.add_edge(i, j, graph_matrix[i, j])
+
+        return graph
     def go_to_exit(self, state):
         return Action(action_type=self.go_towards(state, state["end_pt"]))
 
@@ -70,5 +86,8 @@ class Agent(abc.ABC):
             dists.append(abs(agent_location[0] - rock.loc[0]) + abs(agent_location[1] - rock.loc[1]))
         return dists
 
-    def get_rock_beliefs(self, state) -> np.ndarray:
+    def get_rock_beliefs_as_db_repr(self, state) -> np.ndarray:
         return np.zeros(len(state["rocks_dict"]))
+
+    def get_rock_beliefs(self):
+        raise NotImplementedError

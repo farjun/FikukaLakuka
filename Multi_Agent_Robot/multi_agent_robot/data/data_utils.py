@@ -44,9 +44,6 @@ def graph_baysian_agents_beliefs(db_name="run_1"):
     X = agents_histories[0]['step']
 
     for hist in agents_histories:
-        if hist['cur_agent'][0] not in [1]:
-            continue
-
         beliefs = hist['agent_beliefs']
 
         for i in range(0, len(beliefs[0]), 2):

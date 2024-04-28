@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# encoding: utf-8
 from time import sleep
 
 from Multi_Agent_Robot.multi_agent_robot.data.api import DataApi

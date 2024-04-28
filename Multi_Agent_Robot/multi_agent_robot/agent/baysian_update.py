@@ -2,10 +2,9 @@ import random
 from typing import List, Tuple
 
 import numpy as np
-from dijkstar import Graph, find_path
+from dijkstar import find_path
 
-from Multi_Agent_Robot.multi_agent_robot.agent.base import Agent
-from Multi_Agent_Robot.multi_agent_robot.data.api import DataApi
+from Multi_Agent_Robot.multi_agent_robot.agent.oracle import OracleAgent
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
 from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, RobotActions
 from config import config
@@ -19,15 +18,14 @@ def norm_mat(x: np.ndarray) -> np.ndarray:
     return x, norm_factor
 
 
-class BayesianBeliefAgent(Agent):
+class BayesianBeliefAgent(OracleAgent):
 
     def __init__(self, config_params: dict):
-        self.config_params = config_params
+        super().__init__(config_params)
         rocks = config.get_in_game_context("environment", "rocks")
-        self.rock_probs = dict((tuple(x), {SampleObservation.GOOD_ROCK: 0.5, SampleObservation.BAD_ROCK: 0.5}) for x in rocks)
-        self.gas_fee = config.get_in_game_context("environment", "gas_fee")
+        self.rock_probs = dict(
+            (tuple(x), {SampleObservation.GOOD_ROCK: 0.5, SampleObservation.BAD_ROCK: 0.5}) for x in rocks)
         self.sample_count = dict((tuple(x), 0) for x in rocks)
-        self.data_api = DataApi()
 
     def get_graph_matrix(self, state, norm_matrix=False) -> np.ndarray:
         graph_matrix = super().get_graph_matrix(state)
@@ -41,23 +39,9 @@ class BayesianBeliefAgent(Agent):
 
         return graph_matrix
 
-    def get_graph_obj(self, state) -> Graph:
-        graph = Graph()
-        graph_matrix = self.get_graph_matrix(state)
-
-        state_rocks_arr_not_picked = [loc for loc, rock in state["rocks_dict"].items() if not rock.picked]
-        for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
-            graph_matrix[:, i] -= (self.rock_probs[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
-
-        graph_matrix[:, -1] -= 15
-
-        for i in range(graph_matrix.shape[0]):
-            for j in range(graph_matrix.shape[1]):
-                graph.add_edge(i, j, graph_matrix[i, j])
-
-        return graph
-
     def act(self, state, history: History) -> Action:
+        self.oracle_act(state, history)
+
         if all(map(lambda x: x.picked, state["rocks_dict"].values())):
             return self.go_to_exit(state)
         graph = self.get_graph_obj(state)
@@ -74,7 +58,7 @@ class BayesianBeliefAgent(Agent):
 
     def update(self, state, reward: float, last_action: Action, observation, history: History) -> List[str]:
         if not history.past:
-            return self.get_rock_beliefs(state)
+            return self.get_rock_beliefs_as_db_repr(state)
 
         if last_action.action_type == RobotActions.SAMPLE:
             self.sample_count[last_action.rock_sample_loc] += 1
@@ -104,7 +88,7 @@ class BayesianBeliefAgent(Agent):
 
         rock_probs_sorted = [tuple(self.rock_probs[r].values()) for r in state["rocks_dict"].keys()]
         self.data_api.write_agent_state("bbu", history.cur_step(), np.asarray(rock_probs_sorted))
-        return self.get_rock_beliefs(state)
+        return self.get_rock_beliefs_as_db_repr(state)
 
     @staticmethod
     def calc_good_sample_prob(state, rock_loc: Tuple[int, int], observation: SampleObservation) -> (float, float):
@@ -119,12 +103,16 @@ class BayesianBeliefAgent(Agent):
         if observation == SampleObservation.BAD_ROCK:
             return 1 - sample_prob_with_distance, sample_prob_with_distance
 
-    def get_rock_beliefs(self, state) -> List[str]:
+    def get_rock_beliefs_as_db_repr(self, state) -> List[str]:
         beliefs = list()
         for rock in state["rocks_dict"].values():
             rock_beliefs = self.rock_probs[rock.loc]
             beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
+
         return beliefs
+
+    def get_rock_beliefs(self) -> List[str]:
+        return self.rock_probs
 
     def update_beliefs(self, rock_loc, is_good):
         if is_good:

@@ -3,7 +3,10 @@ gymnasium
 pygame
 pydantic
 numpy
-sqlite3
 pandas
-sklearn
+scikit-learn
 scipy
+confuse
+matplotlib
+gym
+dijkstar
