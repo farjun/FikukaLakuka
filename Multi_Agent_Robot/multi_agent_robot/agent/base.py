@@ -41,23 +41,24 @@ class Agent(abc.ABC):
         for i, loc in enumerate(locations):
             graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
 
+        graph_matrix[:, -1] -= 15
         return graph_matrix
 
-    def get_graph_obj(self, state) -> Graph:
+    def get_graph_obj(self, state, rock_beliefs = None) -> Graph:
         graph = Graph()
         graph_matrix = self.get_graph_matrix(state)
 
         state_rocks_arr_not_picked = [loc for loc, rock in state["rocks_dict"].items() if not rock.picked]
-        for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
-            graph_matrix[:, i] -= (self.get_rock_beliefs()[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
-
-        graph_matrix[:, -1] -= 15
+        if rock_beliefs:
+            for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
+                graph_matrix[:, i] -= (rock_beliefs[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
 
         for i in range(graph_matrix.shape[0]):
             for j in range(graph_matrix.shape[1]):
                 graph.add_edge(i, j, graph_matrix[i, j])
 
         return graph
+
     def go_to_exit(self, state):
         return Action(action_type=self.go_towards(state, state["end_pt"]))
 

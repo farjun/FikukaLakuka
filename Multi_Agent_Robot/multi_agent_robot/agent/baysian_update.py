@@ -33,18 +33,17 @@ class BayesianBeliefAgent(OracleAgent):
         for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
             graph_matrix[:, i] -= (self.rock_probs[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
 
-        graph_matrix[:, -1] -= 15
         if norm_matrix:
             graph_matrix, norm_factor = norm_mat(graph_matrix)
 
         return graph_matrix
 
     def act(self, state, history: History) -> Action:
-        self.oracle_act(state, history)
 
         if all(map(lambda x: x.picked, state["rocks_dict"].values())):
             return self.go_to_exit(state)
-        graph = self.get_graph_obj(state)
+
+        graph = self.get_graph_obj(state, self.get_rock_beliefs())
         shortest_path = find_path(graph, 0, graph.node_count - 1)
         next_best_idx = shortest_path.nodes[1] - 1
         state_rocks_arr_not_picked = [r.loc for r in state["rocks_dict"].values() if not r.picked] + [state["end_pt"]]
@@ -57,6 +56,8 @@ class BayesianBeliefAgent(OracleAgent):
         return Action(action_type=self.go_towards(state, target_loc))
 
     def update(self, state, reward: float, last_action: Action, observation, history: History) -> List[str]:
+        self.oracle_act(state,last_action, history)
+
         if not history.past:
             return self.get_rock_beliefs_as_db_repr(state)
 

@@ -90,7 +90,12 @@ class MultiAgentRobotEnv(AECEnv):
             "end_pt": self.end_pt,
         }
         # Set the GUI
-        self.gui = RockGui(self.state)
+        self._gui = None
+
+    def copy_with_state(cls, state: dict) -> "MultiAgentRobotEnv":
+        mare = MultiAgentRobotEnv()
+        mare.state = state
+        return mare
 
     @property
     def collected_rocks(self):
@@ -122,7 +127,13 @@ class MultiAgentRobotEnv(AECEnv):
         # Reset the current state
         self.update_state()
         # Set the GUI
-        self.gui = RockGui(self.state)
+        self._gui = None
+
+    @property
+    def gui(self):
+        if self._gui is None:
+            self._gui = RockGui(self.state)
+        return self._gui
 
     def step(self, action: Action = None):
         """

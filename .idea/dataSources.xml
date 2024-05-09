@@ -14,7 +14,7 @@
       </libraries>
     </data-source>
     <data-source source="LOCAL" name="robots2_run_1" uuid="e85832f1-4938-4a03-b66c-84737900833f">
-      <driver-ref>2c25e2d0-0f20-4968-b964-2c0244828baf</driver-ref>
+      <driver-ref>61d74af3-9403-4f43-a971-959611536c56</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/fikuka_lakuka/fikuka_lakuka/data/runs/robots2_run_1</jdbc-url>

@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 import numpy as np
 from dijkstar import Graph, find_path
+from dijkstar.algorithm import PathInfo
 
 from Multi_Agent_Robot.multi_agent_robot.agent.base import Agent
 from Multi_Agent_Robot.multi_agent_robot.data.api import DataApi
@@ -30,19 +31,49 @@ class OracleAgent(Agent):
     6. Implement the calc_good_sample_prob method
     7. Implement the update method
     """
+
+    INTERVEEN_THRESHOLD = 10
+
     def __init__(self, config_params: dict):
         self.config_params = config_params
-        rocks = config.get_in_game_context("environment", "rocks")
-        self.rock_probs = dict((tuple(x), {SampleObservation.GOOD_ROCK: 0.5, SampleObservation.BAD_ROCK: 0.5}) for x in rocks)
-        self.gas_fee = config.get_in_game_context("environment", "gas_fee")
-        self.sample_count = dict((tuple(x), 0) for x in rocks)
         self.data_api = DataApi()
+        self.gas_fee = config.get_in_game_context("environment", "gas_fee")
 
-    def oracle_act(self, state, history: History) -> Action:
+        rocks = config.get_in_game_context("environment", "rocks")
+        rocks_reward = config.get_in_game_context("environment", "rocks_reward")
+        self.agents_rock_probs = dict((tuple(x), {SampleObservation.GOOD_ROCK: 0.5, SampleObservation.BAD_ROCK: 0.5}) for x in rocks)
+        self.sample_count = dict((tuple(x), 0) for x in rocks)
+        self.real_rock_probs = dict((tuple(rock_loc), {SampleObservation.GOOD_ROCK: 1 if reward > 0 else 0,
+                                                       SampleObservation.BAD_ROCK: 1 if reward <= 0 else 0}) for rock_loc, reward in zip(rocks, rocks_reward))
+        self.optimal_path: PathInfo = None
+
+    def oracle_act(self, state: dict, last_action: Action, history: History) -> Action:
+        """
+        the oracle preforms the following:
+
+        """
+        optimal_graph = self.get_graph_obj(state, self.real_rock_probs)
+        self.optimal_path = find_path(optimal_graph, 0, optimal_graph.node_count - 1)
+
         if all(map(lambda x: x.picked, state["rocks_dict"].values())):
             return Action(action_type=OracleActions.DONT_SEND_DATA)
 
+        if last_action.action_type in [RobotActions.UP, RobotActions.DOWN, RobotActions.LEFT, RobotActions.RIGHT]:
+            graph = self.get_graph_obj(state, self.agents_rock_probs)
+            shortest_path = find_path(graph, 0, graph.node_count - 1)
+            reward_diff = self.calc_graph_path_reward_diff_from_optimal(shortest_path)
+            if reward_diff >= OracleAgent.INTERVEEN_THRESHOLD:
+                for path_rock in shortest_path.nodes:
+                    rock_loc = state["rocks"][path_rock].loc
+                    if self.real_rock_probs[rock_loc] == 0:
+                        return Action(action_type=OracleActions.SEND_GOOD_ROCK, rock_sample_loc = rock_loc)
+
         return Action(action_type=OracleActions.DONT_SEND_DATA)
 
-    def update(self, state, reward: float, last_action: Action, observation, history: History) -> List[str]:
-        return []
+    def calc_graph_path_reward_diff_from_optimal(self, graph_path: PathInfo):
+        res = self.optimal_path.total_cost - graph_path.total_cost
+        assert res <= 0
+        return res
+
+    def get_rock_beliefs(self):
+        return self.agents_rock_probs
