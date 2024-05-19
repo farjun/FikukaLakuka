@@ -49,7 +49,7 @@ class BayesianBeliefAgent(OracleAgent):
         state_rocks_arr_not_picked = [r.loc for r in state["rocks_dict"].values() if not r.picked] + [state["end_pt"]]
         target_loc = state_rocks_arr_not_picked[next_best_idx]
 
-        if random.random() < 0.5:
+        if target_loc != state["end_pt"] and self.rock_probs[tuple(target_loc)][SampleObservation.GOOD_ROCK] < 0.7:
             target_loc, sample_count = min(self.sample_count.items(), key=lambda x: x[1])
             return Action(action_type=RobotActions.SAMPLE, rock_sample_loc=target_loc)
 

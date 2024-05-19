@@ -10,6 +10,7 @@ from scipy.spatial.distance import cdist
 
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
 from Multi_Agent_Robot.multi_agent_robot.env.types import Action, RobotActions, SampleObservation
+from config import config
 
 
 class Agent(abc.ABC):
@@ -41,7 +42,7 @@ class Agent(abc.ABC):
         for i, loc in enumerate(locations):
             graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
 
-        graph_matrix[:, -1] -= 15
+        graph_matrix[:, -1] -= config.get_in_game_context("environment", "end_pt_reward")
         return graph_matrix
 
     def get_graph_obj(self, state, rock_beliefs = None) -> Graph:
