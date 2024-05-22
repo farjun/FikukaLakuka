@@ -29,7 +29,7 @@ class BayesianBeliefAgent(OracleAgent):
 
     def get_graph_matrix(self, state, norm_matrix=False) -> np.ndarray:
         graph_matrix = super().get_graph_matrix(state)
-        state_rocks_arr_not_picked = [loc for loc, rock in state["rocks_dict"].items() if not rock.picked]
+        state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked]
         for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
             graph_matrix[:, i] -= (self.rock_probs[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
 
@@ -40,16 +40,16 @@ class BayesianBeliefAgent(OracleAgent):
 
     def act(self, state, history: History) -> Action:
 
-        if all(map(lambda x: x.picked, state["rocks_dict"].values())):
+        if all(state.collected_rocks()):
             return self.go_to_exit(state)
 
         graph = self.get_graph_obj(state, self.get_rock_beliefs())
         shortest_path = find_path(graph, 0, graph.node_count - 1)
         next_best_idx = shortest_path.nodes[1] - 1
-        state_rocks_arr_not_picked = [r.loc for r in state["rocks_dict"].values() if not r.picked] + [state["end_pt"]]
+        state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked] + [state.end_pt]
         target_loc = state_rocks_arr_not_picked[next_best_idx]
 
-        if target_loc != state["end_pt"] and self.rock_probs[tuple(target_loc)][SampleObservation.GOOD_ROCK] < 0.7:
+        if target_loc != state.end_pt and self.rock_probs[tuple(target_loc)][SampleObservation.GOOD_ROCK] < 0.7:
             target_loc, sample_count = min(self.sample_count.items(), key=lambda x: x[1])
             return Action(action_type=RobotActions.SAMPLE, rock_sample_loc=target_loc)
 
@@ -87,7 +87,7 @@ class BayesianBeliefAgent(OracleAgent):
             self.rock_probs[last_action.rock_sample_loc] = {SampleObservation.GOOD_ROCK: good_rock_prob,
                                                             SampleObservation.BAD_ROCK: bad_rock_prob}
 
-        rock_probs_sorted = [tuple(self.rock_probs[r].values()) for r in state["rocks_dict"].keys()]
+        rock_probs_sorted = [tuple(self.rock_probs[r.loc].values()) for r in state.rocks]
         self.data_api.write_agent_state("bbu", history.cur_step(), np.asarray(rock_probs_sorted))
         return self.get_rock_beliefs_as_db_repr(state)
 
@@ -106,7 +106,7 @@ class BayesianBeliefAgent(OracleAgent):
 
     def get_rock_beliefs_as_db_repr(self, state) -> List[str]:
         beliefs = list()
-        for rock in state["rocks_dict"].values():
+        for rock in state.rocks:
             rock_beliefs = self.rock_probs[rock.loc]
             beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
 

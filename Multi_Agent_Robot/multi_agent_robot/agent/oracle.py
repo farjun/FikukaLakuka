@@ -46,14 +46,21 @@ class OracleAgent(Agent):
         self.real_rock_probs = dict((tuple(rock_loc), {SampleObservation.GOOD_ROCK: 1 if reward > 0 else 0,
                                                        SampleObservation.BAD_ROCK: 1 if reward <= 0 else 0}) for rock_loc, reward in zip(rocks, rocks_reward))
 
-    def oracle_act(self, state: dict, last_action: Action, history: History) -> Action:
+    def oracle_act(self, state, last_action: Action, history: History) -> Action:
         """
         the oracle preforms the following:
+        1. if not sample -
+                simulate some belief vectors
+                run a simulation of the robot and see what results in the action given
+                set the best belief as the given belief
+            if sample -
+                we can verify our belief using conclusion as to why the robot sent a sample
+
         """
         optimal_graph = self.get_graph_obj(state, self.real_rock_probs)
         optimal_path = find_path(optimal_graph, 0, optimal_graph.node_count - 1)
 
-        if all(map(lambda x: x.picked, state["rocks_dict"].values())):
+        if all(state.collected_rocks()):
             return Action(action_type=OracleActions.DONT_SEND_DATA)
 
         if last_action.action_type in [RobotActions.SAMPLE]:
@@ -73,3 +80,4 @@ class OracleAgent(Agent):
         res = optimal_path.total_cost - graph_path.total_cost
         assert res <= 0
         return res
+

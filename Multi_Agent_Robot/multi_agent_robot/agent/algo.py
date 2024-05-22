@@ -14,7 +14,7 @@ class AlgoAgent(Agent):
         self.action_space = AgentActionSpace(agent_type="robot", n_rocks=len(rocks))
 
     def act(self, state, history: History) -> Action:
-        if all(map(lambda x: x.picked, state["rocks_dict"].values())):
+        if all(map(lambda x: x.picked, state.rocks)):
             return self.go_to_exit(state)
 
         rock_distances = self.calc_rock_distances(state)

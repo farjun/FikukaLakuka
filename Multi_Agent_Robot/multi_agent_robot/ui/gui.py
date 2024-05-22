@@ -1,6 +1,7 @@
 import os
 from typing import Dict, Tuple
 import pygame
+
 from Multi_Agent_Robot.multi_agent_robot.ui.coord import Coord, Tile
 
 PATH = os.path.split(__file__)[0]
@@ -87,20 +88,20 @@ class RockGui(GridGui):
     )
 
     def __init__(self, state):
-        super().__init__(*state["grid_size"], tile_size=self._tile_size)
-        self.history = [self._as_ui_pt(state, state["current_agent_location"])]
+        super().__init__(*state.grid_size, tile_size=self._tile_size)
+        self.history = [self._as_ui_pt(state, state.current_agent_location())]
         self.draw(state)
         pygame.display.update()
         GridGui._dispatch()
 
     def draw(self, state):
         last_state = self.history[-1]
-        cur_pos = self._as_ui_pt(state, state["current_agent_location"])
+        cur_pos = self._as_ui_pt(state, state.current_agent_location())
 
         self.history.append(cur_pos)
         self.board[last_state].draw()
-        self.board[self._as_ui_pt(state, state["end_pt"])].draw(img=self.assets["_DOOR"])
-        for i, rock in enumerate(state["rocks_dict"].values()):
+        self.board[self._as_ui_pt(state, state.end_pt)].draw(img=self.assets["_DOOR"])
+        for i, rock in enumerate(state.rocks):
             if rock.picked:
                 color = pygame.Color('white')
             elif rock.reward > 0:
@@ -110,8 +111,8 @@ class RockGui(GridGui):
 
             self.board[self._as_ui_pt(state, rock.loc)].draw(img=self.assets["_ROCK"], color=color)
 
-        for agent_id,agent in enumerate(state["agents"]):
-            self.board[self._as_ui_pt(state, state["agent_locations"][agent_id])].draw(
+        for agent_id, agent in enumerate(state.agents):
+            self.board[self._as_ui_pt(state, state.agent_locations[agent_id])].draw(
                 img=self.assets["_ROBOT" + str(agent_id)])
 
     def render(self, state, msg=None):
@@ -122,4 +123,4 @@ class RockGui(GridGui):
 
     @staticmethod
     def _as_ui_pt(state, pt: Tuple[int, int]):
-        return pt[0] * state["grid_size"][0] + pt[1]
+        return pt[0] * state.grid_size[0] + pt[1]

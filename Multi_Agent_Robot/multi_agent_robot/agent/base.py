@@ -35,10 +35,10 @@ class Agent(abc.ABC):
         return dist_matrix, predecessors
 
     def get_graph_matrix(self, state) -> np.ndarray:
-        state_rocks_arr_not_picked = [loc for loc, rock in state["rocks_dict"].items() if not rock.picked]
+        state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked]
         graph_nodes_num = len(state_rocks_arr_not_picked) + 2
         graph_matrix = np.zeros((graph_nodes_num, graph_nodes_num))
-        locations = [state["current_agent_location"]] + state_rocks_arr_not_picked + [state["end_pt"]]
+        locations = [state.current_agent_location()] + state_rocks_arr_not_picked + [state.end_pt]
         for i, loc in enumerate(locations):
             graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
 
@@ -49,7 +49,7 @@ class Agent(abc.ABC):
         graph = Graph()
         graph_matrix = self.get_graph_matrix(state)
 
-        state_rocks_arr_not_picked = [loc for loc, rock in state["rocks_dict"].items() if not rock.picked]
+        state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked]
         if rock_beliefs:
             for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
                 graph_matrix[:, i] -= (rock_beliefs[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
@@ -64,7 +64,7 @@ class Agent(abc.ABC):
         return Action(action_type=self.go_towards(state, state["end_pt"]))
 
     def go_towards(self, state, target: np.ndarray) -> RobotActions:
-        cur_loc = state["current_agent_location"]
+        cur_loc = state.current_agent_location()
         if target[0] != cur_loc[0]:
             if target[0] > cur_loc[0]:
                 return RobotActions.DOWN
@@ -83,7 +83,7 @@ class Agent(abc.ABC):
 
     def get_rock_distances(self, state) -> List[int]:
         dists = list()
-        for rock in state["rocks_dict"].keys():
+        for rock in state.rocks:
             agent_location = state.cur_agent_location()
             dists.append(abs(agent_location[0] - rock.loc[0]) + abs(agent_location[1] - rock.loc[1]))
         return dists
