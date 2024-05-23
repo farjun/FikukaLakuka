@@ -1,50 +1,19 @@
 #!/usr/bin/env python
-from time import sleep
-
-from Multi_Agent_Robot.multi_agent_robot.data.api import DataApi
+from Multi_Agent_Robot.multi_agent_robot.agent import init_agent
 from Multi_Agent_Robot.multi_agent_robot.data.data_utils import graph_baysian_agents_beliefs
-from Multi_Agent_Robot.multi_agent_robot.env.multi_agent_robot import MultiAgentRobotEnv
-
-
-def run_one_episode(env, verbose=False):
-    data_api = DataApi(force_recreate=True)
-    env.reset()
-    total_reward = 0
-
-    for i in range(env.MAX_STEPS):
-        done = False
-        for _ in env.agent_iter():
-
-            observation, reward, done, truncated, info = env.step()
-            total_reward += reward
-            if verbose:
-                env.render(mode="human")
-
-            if done:
-                data_api.write_history(env.history)
-                if verbose:
-                    print("done @ step {}".format(i))
-
-                break
-            sleep(0.05)
-        if done:
-            break
-
-    if verbose:
-        print("cumulative reward", total_reward)
-
-    return total_reward
-
+from Multi_Agent_Robot.multi_agent_robot.env.multi_agent_robot import MultiAgentRobotEnv, run_one_episode
+from config import config
 
 def main():
     # first, create the custom environment and run it for one episode
-    env = MultiAgentRobotEnv()
+    agents = [init_agent(agent_id) for agent_id in config.get_in_game_context("playing_agents")]
+    env = MultiAgentRobotEnv(agents)
 
     # next, calculate a baseline of rewards based on random actions
     # (no policy)
     history = []
 
-    sum_reward = run_one_episode(env, verbose=True)
+    sum_reward = run_one_episode(env, verbose=True, use_sleep=True, force_recreate_tables=True)
     history.append(sum_reward)
 
     avg_sum_reward = sum(history) / len(history)

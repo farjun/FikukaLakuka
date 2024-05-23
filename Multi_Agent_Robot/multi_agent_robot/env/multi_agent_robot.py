@@ -1,9 +1,11 @@
+from time import sleep
+
 from pettingzoo import AECEnv
 from gymnasium import spaces
 from pydantic import BaseModel
 
-from Multi_Agent_Robot.multi_agent_robot.agent import init_agent, BayesianBeliefAgent
 from Multi_Agent_Robot.multi_agent_robot.agent.base import Agent
+from Multi_Agent_Robot.multi_agent_robot.data.api import DataApi
 from Multi_Agent_Robot.multi_agent_robot.env.agent_action_space import AgentActionSpace
 import numpy as np
 
@@ -21,11 +23,11 @@ class MultiAgentRobotEnv(AECEnv):
         "name": "multi_agent_robot_v0",
     }
 
-    def __init__(self):
+    def __init__(self, agents: List[Agent]):
         super().__init__()
         # Get all current game configurations
         self.history = History()
-        self.agents: List = [init_agent(agent_id) for agent_id in config.get_in_game_context("playing_agents")]
+        self.agents: List = agents
         self.grid_size: Tuple[int, int] = config.get_in_game_context("environment", "grid_size")
         self.rocks_arr: List[Tuple[int, int]] = [tuple(x) for x in config.get_in_game_context("environment", "rocks")]
         self.rocks_reward_arr: List[int] = config.get_in_game_context("environment", "rocks_reward")
@@ -96,8 +98,8 @@ class MultiAgentRobotEnv(AECEnv):
         # Set the GUI
         self._gui = None
 
-    def copy_with_state(cls, state: dict) -> "MultiAgentRobotEnv":
-        mare = MultiAgentRobotEnv()
+    def copy_with_state(cls, state) -> "MultiAgentRobotEnv":
+        mare = MultiAgentRobotEnv(self.agents)
         mare.state = state
         return mare
 
@@ -140,41 +142,29 @@ class MultiAgentRobotEnv(AECEnv):
         return self._gui
 
     def step(self, action: Action = None):
-        """
-        Used to step the environment forward by one step. It takes an action for the current agent and should be used within a loop to
-        where we loop through all the agents in the environment (Using AECIter).
-        """
-        agent_type = self.agent_types[self.agent_selection]
-        if agent_type == "oracle":
-            return self.oracle_step(self.agent_selection)
-        elif agent_type == "robot":
-            return self.robot_step(self.agent_selection)
-        raise ValueError("Invalid agent type")
-
-    def robot_step(self, agent_id: int):
-        agent = self.agents[agent_id]
+        agent = self.agents[self.agent_selection]
         action = agent.act(self.state, self.history)
         observation, reward, done, robot_observation = None, 0, False, SampleObservation.NO_OBS
 
         if action.action_type == RobotActions.SAMPLE:
-            robot_observation = self.sample_rock(agent_id, action.rock_sample_loc)
+            robot_observation = self.sample_rock(self.agent_selection, action.rock_sample_loc)
         else:  # Action is a movement action
             reward -= self.gas_fee
             # Update location
-            agent_pos = self._agent_locations[agent_id]
+            agent_pos = self._agent_locations[self.agent_selection]
             board_x, board_y = self._board.shape
             new_agent_pos = self.move_robot(action, agent_pos, board_x, board_y)
             self._board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
             self._board[new_agent_pos[0], new_agent_pos[1]] = CellType.ROBOT1.value
-            self._agent_locations[agent_id] = new_agent_pos
+            self._agent_locations[self.agent_selection] = new_agent_pos
             reward += self.remove_rock(agent_pos, tuple(new_agent_pos))
 
-        if self._agent_locations[agent_id] == self.end_pt:
+        if self._agent_locations[self.agent_selection] == self.end_pt:
             done = True
             reward += 10
         # Update belief vector with respect to each agent
         agent_beliefs = agent.update(self.state, reward, action, observation, self.history)
-        self.history.update(agent_id, action, robot_observation, reward, self._agent_locations, agent_beliefs.copy())
+        self.history.update(self.agent_selection, action, robot_observation, reward, self._agent_locations, agent_beliefs.copy())
 
         observation = self.state.board, agent_beliefs
         self.update_state()
@@ -189,37 +179,6 @@ class MultiAgentRobotEnv(AECEnv):
             reward = rock.reward
             self._board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
         return reward
-
-    def oracle_step(self, agent_id: int):
-        information_cost = config.get_in_game_context("environment", "information_cost")
-        agent = self.agents[agent_id]
-        action = agent.act(self.state, self.history)
-        observation, reward, done = None, 0, False
-        # TODO maybe if we want we can add a parameter to the oracle to specify which robot to update
-        if action.action_type == OracleActions.SEND_GOOD_ROCK:
-            reward -= information_cost
-            # Update robot beliefs
-            for robot in self.agents:
-                if isinstance(robot, BayesianBeliefAgent):
-                    robot.update_beliefs(action.rock_sample_loc, True)
-        elif action.action_type == OracleActions.SEND_BAD_ROCK:
-            reward -= information_cost
-            # Update robot beliefs
-            for robot in self.agents:
-                if isinstance(robot, BayesianBeliefAgent):
-                    robot.update_beliefs(action.rock_sample_loc, False)
-        elif action.action_type == OracleActions.DONT_SEND_DATA:
-            pass
-
-        agent_beliefs = agent.update(self.state, reward, action, observation, self.history)
-        # TODO maybe define this as somthing more meaningful
-        oracle_observation = SampleObservation.NO_OBS
-        self.history.update(agent_id, action, oracle_observation, reward, self._agent_locations, agent_beliefs.copy())
-
-        observation = self.state.board, agent_beliefs
-        self.update_state()
-        truncated = False
-        return observation, reward, done, truncated, self.state
 
     @staticmethod
     def move_robot(action, agent_pos, board_x, board_y):
@@ -317,3 +276,34 @@ class State(BaseModel):
 
     def collected_rocks(self)->List[bool]:
         return [rt.picked for rt in self.rocks]
+
+
+def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables = False):
+    data_api = DataApi(force_recreate=force_recreate_tables)
+    env.reset()
+    total_reward = 0
+
+    for i in range(env.MAX_STEPS):
+        done = False
+        for _ in env.agent_iter():
+
+            observation, reward, done, truncated, info = env.step()
+            total_reward += reward
+            if verbose:
+                env.render(mode="human")
+
+            if done:
+                data_api.write_history(env.history)
+                if verbose:
+                    print("done @ step {}".format(i))
+
+                break
+            if use_sleep:
+                sleep(0.05)
+        if done:
+            break
+
+    if verbose:
+        print("cumulative reward", total_reward)
+
+    return total_reward

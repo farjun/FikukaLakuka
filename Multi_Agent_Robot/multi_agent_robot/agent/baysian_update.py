@@ -49,7 +49,7 @@ class BayesianBeliefAgent(OracleAgent):
         state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked] + [state.end_pt]
         target_loc = state_rocks_arr_not_picked[next_best_idx]
 
-        if target_loc != state.end_pt and self.rock_probs[tuple(target_loc)][SampleObservation.GOOD_ROCK] < 0.7:
+        if all(self.rock_probs[tuple(r.loc)][SampleObservation.GOOD_ROCK] < 0.7 for r in state.rocks):
             target_loc, sample_count = min(self.sample_count.items(), key=lambda x: x[1])
             return Action(action_type=RobotActions.SAMPLE, rock_sample_loc=target_loc)
 
@@ -93,12 +93,12 @@ class BayesianBeliefAgent(OracleAgent):
 
     @staticmethod
     def calc_good_sample_prob(state, rock_loc: Tuple[int, int], observation: SampleObservation) -> (float, float):
-        location = state["current_agent_location"]
+        location = state.current_agent_location()
         # sensor quality
         # distance to rock
         distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
         # measurement error function
-        sample_prob_with_distance = 1 / 2 * (1 + np.exp(-(distance_to_rock / 3) * np.log(2) / state["sample_prob"]))
+        sample_prob_with_distance = 1 / 2 * (1 + np.exp(-(distance_to_rock / 3) * np.log(2) / state.sample_prob))
         if observation == SampleObservation.GOOD_ROCK:
             return sample_prob_with_distance, 1 - sample_prob_with_distance
         if observation == SampleObservation.BAD_ROCK:
