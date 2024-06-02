@@ -18,7 +18,7 @@ from typing import Tuple, List, Dict
 
 
 class MultiAgentRobotEnv(AECEnv):
-    MAX_STEPS = 1000
+    MAX_STEPS = 200
     metadata = {
         "name": "multi_agent_robot_v0",
     }
@@ -41,7 +41,8 @@ class MultiAgentRobotEnv(AECEnv):
         self.agent_types: List[str] = ["oracle" if agent == "oracle" else "robot" for agent in self.agents]
         self.n_rocks: int = len(self.rocks_arr)
         # Create a dictionary of rocks and their rewards and whether they have been collected or not
-        self.rocks_arr = [RockTile(loc=loc, reward=reward) for loc, reward in zip(self.rocks_arr, self.rocks_reward_arr)]
+        self.rocks_arr = [RockTile(loc=loc, reward=reward) for loc, reward in
+                          zip(self.rocks_arr, self.rocks_reward_arr)]
         self.rocks_map: Dict[Tuple[int, int], RockTile] = {tuple(rt.loc): rt for rt in self.rocks_arr}
 
         # Define the observation space as a dictionary of spaces for each agent, containing the board as seen by the agent and the agent's
@@ -80,6 +81,7 @@ class MultiAgentRobotEnv(AECEnv):
 
         # Set the current state
         self.state = State(
+            cur_step = len(self.history.past),
             board=self._board,
             agent_selection=self.agent_selection,
             grid_size=self.grid_size,
@@ -97,11 +99,6 @@ class MultiAgentRobotEnv(AECEnv):
         )
         # Set the GUI
         self._gui = None
-
-    def copy_with_state(cls, state) -> "MultiAgentRobotEnv":
-        mare = MultiAgentRobotEnv(self.agents)
-        mare.state = state
-        return mare
 
     @property
     def collected_rocks(self):
@@ -162,9 +159,18 @@ class MultiAgentRobotEnv(AECEnv):
         if self._agent_locations[self.agent_selection] == self.end_pt:
             done = True
             reward += 10
+
         # Update belief vector with respect to each agent
-        agent_beliefs = agent.update(self.state, reward, action, observation, self.history)
-        self.history.update(self.agent_selection, action, robot_observation, reward, self._agent_locations, agent_beliefs.copy())
+        agent_beliefs, oracles_beliefs, oracle_action = agent.update(self.state, reward, action, observation, self.history)
+        self.history.update(
+            cur_agent = self.agent_selection,
+            action=action,
+            observation=robot_observation,
+            reward=reward,
+            players_pos=self._agent_locations,
+            agent_beliefs=agent_beliefs,
+            oracle_action=oracle_action,
+            oracle_beliefs=oracles_beliefs)
 
         observation = self.state.board, agent_beliefs
         self.update_state()
@@ -239,8 +245,8 @@ class MultiAgentRobotEnv(AECEnv):
         self.state.rocks_map = self.rocks_map
 
 
-
 class State(BaseModel):
+    cur_step: int
     board: np.ndarray
     grid_size: Tuple[int, int]
     sample_prob: float
@@ -256,30 +262,15 @@ class State(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def copy_state(self):
-        return State(
-            board= self.board.copy(),
-            grid_size= self.grid_size,
-            sample_prob= self.sample_prob,
-            agents= self.agents,
-            agent_locations= self.agent_locations,
-            cur_agent= self.agent_selection,
-            rocks= self.rocks,
-            collected_rocks= self.collected_rocks,
-            gas_fee= self.gas_fee,
-            start_pt= self.start_pt,
-            end_pt= self.end_pt
-        )
-
     def current_agent_location(self):
         return self.agent_locations[self.agent_selection]
 
-    def collected_rocks(self)->List[bool]:
+    def collected_rocks(self) -> List[bool]:
         return [rt.picked for rt in self.rocks]
 
 
-def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables = False):
-    data_api = DataApi(force_recreate=force_recreate_tables)
+def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=False, schema_name="env"):
+    data_api = DataApi(force_recreate=force_recreate_tables, schema=schema_name)
     env.reset()
     total_reward = 0
 
@@ -294,6 +285,7 @@ def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables =
 
             if done:
                 data_api.write_history(env.history)
+
                 if verbose:
                     print("done @ step {}".format(i))
 

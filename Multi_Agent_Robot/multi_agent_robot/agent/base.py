@@ -19,8 +19,8 @@ class Agent(abc.ABC):
     def act(self, state, history: History) -> Action:
         pass
 
-    def update(self, state, reward: float, last_action: Action, rock_observation, history: History) -> List[float]:
-        return []
+    def update(self, state, reward: float, last_action: Action, rock_observation, history: History) -> Tuple[List[str], List[str]]:
+        return [], [], None
 
     def calc_rock_distances(self, state):
         return np.linalg.norm(np.asarray(list(state["rocks_dict"].keys())) - np.asarray(state["current_agent_location"]), axis=1, ord=1)
@@ -41,7 +41,7 @@ class Agent(abc.ABC):
         locations = [state.current_agent_location()] + state_rocks_arr_not_picked + [state.end_pt]
         for i, loc in enumerate(locations):
             graph_matrix[i, :] = np.array(cdist([loc], locations, metric='cityblock')[0])
-
+        graph_matrix *= state.gas_fee
         graph_matrix[:, -1] -= config.get_in_game_context("environment", "end_pt_reward")
         return graph_matrix
 
@@ -65,12 +65,6 @@ class Agent(abc.ABC):
 
     def go_towards(self, state, target: np.ndarray) -> RobotActions:
         cur_loc = state.current_agent_location()
-        if target[0] != cur_loc[0]:
-            if target[0] > cur_loc[0]:
-                return RobotActions.DOWN
-
-            elif target[0] < cur_loc[0]:
-                return RobotActions.UP
 
         if target[1] != cur_loc[1]:
             if target[1] > cur_loc[1]:
@@ -78,6 +72,13 @@ class Agent(abc.ABC):
 
             elif target[1] < cur_loc[1]:
                 return RobotActions.LEFT
+
+        if target[0] != cur_loc[0]:
+            if target[0] > cur_loc[0]:
+                return RobotActions.DOWN
+
+            elif target[0] < cur_loc[0]:
+                return RobotActions.UP
 
         return None
 
@@ -88,7 +89,7 @@ class Agent(abc.ABC):
             dists.append(abs(agent_location[0] - rock.loc[0]) + abs(agent_location[1] - rock.loc[1]))
         return dists
 
-    def get_rock_beliefs_as_db_repr(self, state) -> np.ndarray:
+    def get_beliefs_as_db_repr(self, state) -> np.ndarray:
         return np.zeros(len(state["rocks_dict"]))
 
     def get_rock_beliefs(self):

@@ -27,6 +27,7 @@ class BayesianBeliefAgent(OracleAgent):
             (tuple(x), {SampleObservation.GOOD_ROCK: 0.5, SampleObservation.BAD_ROCK: 0.5}) for x in rocks)
         self.sample_count = dict((tuple(x), 0) for x in rocks)
 
+
     def get_graph_matrix(self, state, norm_matrix=False) -> np.ndarray:
         graph_matrix = super().get_graph_matrix(state)
         state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked]
@@ -39,27 +40,26 @@ class BayesianBeliefAgent(OracleAgent):
         return graph_matrix
 
     def act(self, state, history: History) -> Action:
-
         if all(state.collected_rocks()):
             return self.go_to_exit(state)
 
         graph = self.get_graph_obj(state, self.get_rock_beliefs())
         shortest_path = find_path(graph, 0, graph.node_count - 1)
         next_best_idx = shortest_path.nodes[1] - 1
-        state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked] + [state.end_pt]
-        target_loc = state_rocks_arr_not_picked[next_best_idx]
-
-        if all(self.rock_probs[tuple(r.loc)][SampleObservation.GOOD_ROCK] < 0.7 for r in state.rocks):
-            target_loc, sample_count = min(self.sample_count.items(), key=lambda x: x[1])
+        possible_targets = [rock.loc for rock in state.rocks if not rock.picked] + [state.end_pt]
+        target_loc = possible_targets[next_best_idx]
+        agent_confidenc = abs(sum([self.rock_probs[r][SampleObservation.GOOD_ROCK] for r in self.rock_probs]) / len(self.rock_probs) - 0.5)
+        if agent_confidenc < 0.2:
+            target_loc, sample_count = min(self.sample_count.items(), key=lambda x: x[1] + abs(0.5-self.rock_probs[x[0]][SampleObservation.GOOD_ROCK])*100)
             return Action(action_type=RobotActions.SAMPLE, rock_sample_loc=target_loc)
 
         return Action(action_type=self.go_towards(state, target_loc))
 
-    def update(self, state, reward: float, last_action: Action, observation, history: History) -> List[str]:
-        self.oracle_act(state,last_action, history)
+    def update(self, state, reward: float, last_action: Action, observation, history: History) -> Tuple[List[str], List[str], Action]:
+        oracle_action = self.oracle_act(state, last_action, history)
 
         if not history.past:
-            return self.get_rock_beliefs_as_db_repr(state)
+            return *self.get_beliefs_as_db_repr(state), oracle_action
 
         if last_action.action_type == RobotActions.SAMPLE:
             self.sample_count[last_action.rock_sample_loc] += 1
@@ -87,9 +87,7 @@ class BayesianBeliefAgent(OracleAgent):
             self.rock_probs[last_action.rock_sample_loc] = {SampleObservation.GOOD_ROCK: good_rock_prob,
                                                             SampleObservation.BAD_ROCK: bad_rock_prob}
 
-        rock_probs_sorted = [tuple(self.rock_probs[r.loc].values()) for r in state.rocks]
-        self.data_api.write_agent_state("bbu", history.cur_step(), np.asarray(rock_probs_sorted))
-        return self.get_rock_beliefs_as_db_repr(state)
+        return *self.get_beliefs_as_db_repr(state), oracle_action
 
     @staticmethod
     def calc_good_sample_prob(state, rock_loc: Tuple[int, int], observation: SampleObservation) -> (float, float):
@@ -104,23 +102,20 @@ class BayesianBeliefAgent(OracleAgent):
         if observation == SampleObservation.BAD_ROCK:
             return 1 - sample_prob_with_distance, sample_prob_with_distance
 
-    def get_rock_beliefs_as_db_repr(self, state) -> List[str]:
+    def get_beliefs_as_db_repr(self, state) -> Tuple[List[str], List[str]]:
+        oracle_beliefs = self.get_oracles_beliefs_as_db_repr(state)
         beliefs = list()
         for rock in state.rocks:
             rock_beliefs = self.rock_probs[rock.loc]
             beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
 
-        return beliefs
+        return beliefs, oracle_beliefs
 
     def get_rock_beliefs(self) -> List[str]:
         return self.rock_probs
 
-    def update_beliefs(self, rock_loc, is_good):
-        if is_good:
-            self.rock_probs[rock_loc] = {SampleObservation.GOOD_ROCK: 1, SampleObservation.BAD_ROCK: 0}
-        else:
-            self.rock_probs[rock_loc] = {SampleObservation.GOOD_ROCK: 0, SampleObservation.BAD_ROCK: 1}
 
-# implement both offline and online
-# add offline calc for resilience factor
-#
+
+# implement full graph dijstra
+# find a way to consider sample prob,
+

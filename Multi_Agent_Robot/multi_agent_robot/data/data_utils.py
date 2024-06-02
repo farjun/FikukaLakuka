@@ -27,16 +27,16 @@ class DataUtils:
 # train an NN to see if the env will need a intervention (Meta oracle)
 
 # ofra and sarit kraus
-
+from config import config
 
 def run_state_clustering():
-    data_api = DataApi(db_name="run_1")
+    data_api = DataApi(db_name=config.get)
     du = DataUtils(data_api)
     clustered_states = du.cluster_states("bbu")
     plot_3d_data(clustered_states, "baysian update states")
 
 
-def graph_baysian_agents_beliefs(db_name="run_1"):
+def graph_baysian_agents_beliefs(db_name=config.get("general", "db_name")):
     data_api = DataApi(db_name=db_name)
     du = DataUtils(data_api)
     agents_histories = du.get_history_by_agent()

@@ -33,14 +33,14 @@ class OracleAgent(Agent):
     7. Implement the update method
     """
 
-    INTERVEEN_THRESHOLD = -20
+    INTERVEEN_THRESHOLD = 3
 
     def __init__(self, config_params: dict):
         super().__init__()
         self.config_params = config_params
-        self.data_api = DataApi()
+        self.data_api = DataApi(force_recreate=True)
         self.gas_fee = config.get_in_game_context("environment", "gas_fee")
-        self.inner_simulations = True
+        self.in_a_simulation = False
         rocks = config.get_in_game_context("environment", "rocks")
         rocks_reward = config.get_in_game_context("environment", "rocks_reward")
         self.rock_probs= dict((tuple(x), {SampleObservation.GOOD_ROCK: 0.5, SampleObservation.BAD_ROCK: 0.5}) for x in rocks)
@@ -49,7 +49,15 @@ class OracleAgent(Agent):
         self.real_rock_probs = dict((tuple(rock_loc), {SampleObservation.GOOD_ROCK: 1 if reward > 0 else 0,
                                                        SampleObservation.BAD_ROCK: 1 if reward <= 0 else 0}) for rock_loc, reward in zip(rocks, rocks_reward))
 
-    def oracle_act(self, state, last_action: Action, history: History) -> Action:
+    def get_oracles_beliefs_as_db_repr(self, state) -> np.ndarray:
+        oracle_beliefs = list()
+        for rock in state.rocks:
+            rock_beliefs = self.agents_rock_probs[rock.loc]
+            oracle_beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
+
+        return oracle_beliefs
+
+    def oracle_act(self, state, last_action: Action, history: History):
         """
         the oracle preforms the following:
         1. if not sample -
@@ -60,37 +68,67 @@ class OracleAgent(Agent):
                 we can verify our belief using conclusion as to why the robot sent a sample
 
         """
-        if not self.inner_simulations:
+        if self.in_a_simulation:
             return Action(action_type=OracleActions.DONT_SEND_DATA)
 
-        optimal_graph = self.get_graph_obj(state, self.real_rock_probs)
-        optimal_path = find_path(optimal_graph, 0, optimal_graph.node_count - 1)
 
         if all(state.collected_rocks()):
             return Action(action_type=OracleActions.DONT_SEND_DATA)
 
         if last_action.action_type in [RobotActions.SAMPLE]:
-            shortest_path, cost_diff = self.get_agent_graph_path(state, optimal_path)
-            if cost_diff <= OracleAgent.INTERVEEN_THRESHOLD:
-                for path_rock in shortest_path.nodes:
-                    rock_loc = state.rocks[path_rock].loc
-                    if self.real_rock_probs[rock_loc] == 0:
-                        return Action(action_type=OracleActions.SEND_GOOD_ROCK, rock_sample_loc = rock_loc)
+            graph = self.get_graph_obj(state, self.agents_rock_probs)
+            shortest_path = find_path(graph, 0, graph.node_count - 1)
+            generated_rock_probs, changed_rock_locs = self.generate_possible_rock_probs()
+            sum_rewards = self.simulate_agent_run(state, [self.real_rock_probs] + generated_rock_probs, changed_rock_locs)
+            optimal_reward = sum_rewards.pop(0)
+            max_sum_i, max_sum = max(enumerate(sum_rewards), key=lambda x: x[1])
+            if max_sum >= OracleAgent.INTERVEEN_THRESHOLD and changed_rock_locs[max_sum_i] is not None:
+                rock_loc = changed_rock_locs[max_sum_i]
+                self.rock_probs[rock_loc] = generated_rock_probs[max_sum_i][rock_loc]
+                self.agents_rock_probs[rock_loc] = generated_rock_probs[max_sum_i][rock_loc]
+                return Action(action_type=OracleActions.SEND_GOOD_ROCK, rock_sample_loc=rock_loc)
 
         return Action(action_type=OracleActions.DONT_SEND_DATA)
+
+    def generate_possible_rock_probs(self) -> Tuple[List[dict], List]:
+        interveen_rock_probs = [self.agents_rock_probs.copy()]
+        rocks_locs = [None]
+
+        for rock_loc in self.agents_rock_probs:
+            interveened_agents_rock_probs = self.agents_rock_probs.copy()
+            interveened_agents_rock_probs[rock_loc] = self.real_rock_probs[rock_loc]
+
+            interveen_rock_probs.append(interveened_agents_rock_probs)
+            rocks_locs.append(rock_loc)
+
+        return interveen_rock_probs, rocks_locs
+
     def enter_inner_simulation_mode(self, beliefs: Dict[tuple, Dict[SampleObservation,float]]):
-        self.inner_simulations = False
+        self.in_a_simulation = True
         self._real_agents_beliefs = self.rock_probs
         self.rock_probs = beliefs
 
-    def exit_inner_simulation_mode(self):
-        self.inner_simulations = True
-        self.rock_probs = self._real_agents_beliefs
+        self._real_agents_sample_counts = self.sample_count.copy()
 
-    def get_agent_graph_path(self, state: State, optimal_path: PathInfo) -> float:
-        self.enter_inner_simulation_mode(self.agents_rock_probs)
-        inner_env = MultiAgentRobotEnv(state.agents)
-        sum_reward = run_one_episode(inner_env)
-        self.exit_inner_simulation_mode()
-        return None, None
+
+    def exit_inner_simulation_mode(self):
+        self.in_a_simulation = False
+        self.rock_probs = self._real_agents_beliefs
+        self.sample_count = self._real_agents_sample_counts
+
+    def simulate_agent_run(self, state: State, rock_probs: List[dict], changed_rock_locs: List[tuple]) -> List[float]:
+        sum_rewards = list()
+        for rock_prob, changed_rock_loc in zip(rock_probs, changed_rock_locs):
+            self.enter_inner_simulation_mode(rock_prob.copy())
+            inner_env = MultiAgentRobotEnv(state.agents)
+            formatted_changed_rock_loc = f"{changed_rock_loc[0]}_{changed_rock_loc[1]}" if changed_rock_loc is not None else "None"
+            sum_rewards.append(run_one_episode(inner_env, schema_name=f"oracle_simulations_{state.cur_step}_{formatted_changed_rock_loc}"))
+            self.exit_inner_simulation_mode()
+
+        return sum_rewards
+
+
+# TODO: make simulation data visible in DB
+# TODO better planning course - somthing the includes the sample prob
+# oracles belief on agents belief - should be a dict of dicts
 
