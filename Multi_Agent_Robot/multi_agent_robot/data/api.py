@@ -50,8 +50,6 @@ class DataApi:
         if force_recreate:
             print(f"Dropping all Tables!")
             cur.execute(f"drop table if exists {self.history_table_name}")
-            for agent in self.agents:
-                cur.execute(f"drop table if exists {self.get_agent_table_name(agent)}")
 
         cur.execute(
             f"create table if not exists {self.history_table_name} ("
@@ -65,15 +63,10 @@ class DataApi:
                 f"oracle_action string,"
                 f"oracle_beliefs string)"
         )
-        for agent in self.agents:
-            cur.execute(f"create table if not exists {self.get_agent_table_name(agent)} (step int, agent_state array, clustered_state string)")
 
     @property
     def history_table_name(self):
         return f"{self.schema}_history"
-
-    def get_agent_table_name(self, agent_name: str):
-        return f"{self.schema}_agent_{agent_name}"
 
     def close(self):
         self._db_con.close()
@@ -88,34 +81,6 @@ class DataApi:
                         (i, *step))
         self._db_con.commit()
         cur.close()
-
-    def write_agent_state(self, agent: str, step: int, agent_state: np.array, clustered_state: str = 'no value'):
-        cur = self._db_con.cursor()
-        cur.execute(f"insert into {self.get_agent_table_name(agent)} (step, agent_state, clustered_state) values (?,?,?)",
-                    (step, agent_state, clustered_state))
-        self._db_con.commit()
-        cur.close()
-
-    def get_state(self, agent: str, step: int):
-        cur = self._db_con.cursor()
-        res = cur.execute(f"select * from {self.get_agent_table_name(agent)} where step={step})  ")
-        cur.close()
-        return res
-
-    def get_all_from_table(self, agent: str, step: int):
-        cur = self._db_con.cursor()
-        res = cur.execute(f"select * from {self.get_agent_table_name(agent)} where step={step})  ")
-        cur.close()
-        return res
-
-    def get_all_states(self, agent: str, flatten_states=False) -> Tuple[int, np.array, str]:
-        cur = self._db_con.cursor()
-        res = cur.execute(f"select * from {self.get_agent_table_name(agent)} order by step asc").fetchall()
-        if flatten_states:
-            res = [it[1].flatten() for it in res]
-
-        cur.close()
-        return res
 
     def get_history(self, agent: str = None, as_df=True):
         cur = self._db_con.cursor()

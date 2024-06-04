@@ -56,7 +56,7 @@ class BayesianBeliefAgent(OracleAgent):
         return Action(action_type=self.go_towards(state, target_loc))
 
     def update(self, state, reward: float, last_action: Action, observation, history: History) -> Tuple[List[str], List[str], Action]:
-        oracle_action = self.oracle_act(state, last_action, history)
+        oracle_action = self.oracle_act(state, last_action, observation, history)
 
         if not history.past:
             return *self.get_beliefs_as_db_repr(state), oracle_action
@@ -64,43 +64,12 @@ class BayesianBeliefAgent(OracleAgent):
         if last_action.action_type == RobotActions.SAMPLE:
             self.sample_count[last_action.rock_sample_loc] += 1
             rock_prob = self.rock_probs[last_action.rock_sample_loc]
-            if SampleObservation == SampleObservation.GOOD_ROCK:
-                likelihood = self.calc_good_sample_prob(state, last_action.rock_sample_loc, SampleObservation.GOOD_ROCK)
-                likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
-                likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
-                posterior_good_rock_given_good_observation = likelihood_of_good_observation_from_a_good_rock / \
-                                                             (
-                                                                     likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
-                good_rock_prob = max([posterior_good_rock_given_good_observation, 0])
-                bad_rock_prob = 1 - good_rock_prob
-
-            else:  # observation ==SampleObservation.BAD_ROCK
-                likelihood = self.calc_good_sample_prob(state, last_action.rock_sample_loc, SampleObservation.BAD_ROCK)
-                likelihood_of_bad_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
-                likelihood_of_bad_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
-                posterior_good_rock_given_bad_observation = likelihood_of_bad_observation_from_a_good_rock / \
-                                                            (
-                                                                    likelihood_of_bad_observation_from_a_bad_rock + likelihood_of_bad_observation_from_a_bad_rock)
-                good_rock_prob = max([posterior_good_rock_given_bad_observation, 0])
-                bad_rock_prob = 1 - good_rock_prob
+            bad_rock_prob, good_rock_prob = self.get_bu_rock_probs(last_action.rock_sample_loc, rock_prob, observation, state)
 
             self.rock_probs[last_action.rock_sample_loc] = {SampleObservation.GOOD_ROCK: good_rock_prob,
                                                             SampleObservation.BAD_ROCK: bad_rock_prob}
 
         return *self.get_beliefs_as_db_repr(state), oracle_action
-
-    @staticmethod
-    def calc_good_sample_prob(state, rock_loc: Tuple[int, int], observation: SampleObservation) -> (float, float):
-        location = state.current_agent_location()
-        # sensor quality
-        # distance to rock
-        distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
-        # measurement error function
-        sample_prob_with_distance = 1 / 2 * (1 + np.exp(-(distance_to_rock / 3) * np.log(2) / state.sample_prob))
-        if observation == SampleObservation.GOOD_ROCK:
-            return sample_prob_with_distance, 1 - sample_prob_with_distance
-        if observation == SampleObservation.BAD_ROCK:
-            return 1 - sample_prob_with_distance, sample_prob_with_distance
 
     def get_beliefs_as_db_repr(self, state) -> Tuple[List[str], List[str]]:
         oracle_beliefs = self.get_oracles_beliefs_as_db_repr(state)

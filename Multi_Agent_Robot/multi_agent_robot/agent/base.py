@@ -61,7 +61,7 @@ class Agent(abc.ABC):
         return graph
 
     def go_to_exit(self, state):
-        return Action(action_type=self.go_towards(state, state["end_pt"]))
+        return Action(action_type=self.go_towards(state, state.end_pt))
 
     def go_towards(self, state, target: np.ndarray) -> RobotActions:
         cur_loc = state.current_agent_location()
@@ -94,3 +94,38 @@ class Agent(abc.ABC):
 
     def get_rock_beliefs(self):
         raise NotImplementedError
+
+    @staticmethod
+    def calc_good_sample_prob(state, rock_loc: Tuple[int, int], observation: SampleObservation) -> (float, float):
+        location = state.current_agent_location()
+        # sensor quality
+        # distance to rock
+        distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
+        # measurement error function
+        sample_prob_with_distance = 1 / 2 * (1 + np.exp(-(distance_to_rock / 3) * np.log(2) / state.sample_prob))
+        if observation == SampleObservation.GOOD_ROCK:
+            return sample_prob_with_distance, 1 - sample_prob_with_distance
+        if observation == SampleObservation.BAD_ROCK:
+            return 1 - sample_prob_with_distance, sample_prob_with_distance
+
+    def get_bu_rock_probs(self, rock_sample_loc:tuple[int,int], rock_prob:dict, observation: SampleObservation, state):
+        if observation == SampleObservation.GOOD_ROCK:
+            likelihood = self.calc_good_sample_prob(state, rock_sample_loc, SampleObservation.GOOD_ROCK)
+            likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
+            likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
+            posterior_good_rock_given_good_observation = likelihood_of_good_observation_from_a_good_rock / \
+                                                         (
+                                                                 likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
+            good_rock_prob = max([posterior_good_rock_given_good_observation, 0])
+            bad_rock_prob = 1 - good_rock_prob
+
+        else:  # observation ==SampleObservation.BAD_ROCK
+            likelihood = self.calc_good_sample_prob(state, rock_sample_loc, SampleObservation.BAD_ROCK)
+            likelihood_of_bad_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
+            likelihood_of_bad_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
+            posterior_good_rock_given_bad_observation = likelihood_of_bad_observation_from_a_good_rock / \
+                                                        (
+                                                                likelihood_of_bad_observation_from_a_bad_rock + likelihood_of_bad_observation_from_a_bad_rock)
+            good_rock_prob = max([posterior_good_rock_given_bad_observation, 0])
+            bad_rock_prob = 1 - good_rock_prob
+        return bad_rock_prob, good_rock_prob

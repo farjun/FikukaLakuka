@@ -18,7 +18,7 @@ def main():
 
     avg_sum_reward = sum(history) / len(history)
     print("\nbaseline cumulative reward: {:6.2}".format(avg_sum_reward))
-    graph_baysian_agents_beliefs()
+    # graph_baysian_agents_beliefs()
 
 
 if __name__ == "__main__":
