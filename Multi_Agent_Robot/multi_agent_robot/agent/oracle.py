@@ -67,7 +67,7 @@ class OracleAgent(Agent):
             oracle_beliefs.append(f"{cur_oracle_beliefs_on_agents_rock_probs}")
         return oracle_beliefs
 
-    def oracle_act(self, state, last_action: Action, observation:SampleObservation, history: History):
+    def oracle_act(self, state, last_action: Action, observation: SampleObservation, history: History):
         """
         the oracle preforms the following:
         1. if not sample -
@@ -76,7 +76,6 @@ class OracleAgent(Agent):
                 set the best belief as the given belief
             if sample -
                 we can verify our belief using conclusion as to why the robot sent a sample
-
         """
         if self.in_a_simulation:
             return Action(action_type=OracleActions.DONT_SEND_DATA)
@@ -86,37 +85,42 @@ class OracleAgent(Agent):
 
         if last_action.action_type in [RobotActions.SAMPLE]:
             self.update_agents_rock_probs_on_agent_sample(last_action.rock_sample_loc, state)
-            generated_rock_probs, changed_rock_locs = self.generate_possible_rock_probs()
-            sum_rewards = self.simulate_agent_run(state, generated_rock_probs,
-                                                  changed_rock_locs)
+            no_interveen_rock_probs, interveen_rock_probs, changed_rock_locs = self.generate_possible_rock_probs()
+            sum_rewards = self.simulate_agent_run(state, [self.real_rock_probs.copy()] + no_interveen_rock_probs + interveen_rock_probs, changed_rock_locs)
+            # TODO fix sum_rewards split issiues
             optimal_reward = sum_rewards.pop(0)
-            max_sum_i, max_sum = max(enumerate(sum_rewards), key=lambda x: x[1])
-            if max_sum >= OracleAgent.INTERVEEN_THRESHOLD and changed_rock_locs[max_sum_i] is not None:
-                rock_loc = changed_rock_locs[max_sum_i]
+            no_op_rewards, yes_op_rewards = sum_rewards[::2], sum_rewards[1::2]
+            max_send_data_reward_i, max_send_data_reward = max(enumerate(yes_op_rewards), key=lambda x: x[1])
+            matching_no_send_data_reward = no_op_rewards[max_send_data_reward_i]
+            if (max_send_data_reward > matching_no_send_data_reward and
+                    max_send_data_reward - matching_no_send_data_reward >= OracleAgent.INTERVEEN_THRESHOLD):
+                rock_loc = changed_rock_locs[max_send_data_reward_i]
                 self.update_agents_rock_probs_on_send_data(rock_loc)
                 return Action(action_type=OracleActions.SEND_GOOD_ROCK, rock_sample_loc=rock_loc)
 
         return Action(action_type=OracleActions.DONT_SEND_DATA)
 
-    def generate_possible_rock_probs(self) -> Tuple[List[dict], List]:
-        interveen_rock_probs = [self.real_rock_probs.copy()]
+    def generate_possible_rock_probs(self) -> Tuple[List[dict], List[dict], List]:
+        interveen_rock_probs = []
+        no_interveen_rock_probs = []
         rocks_locs = [None]
         choice = np.random.choice(self.agents_rock_probs, size=min(20, len(self.agents_rock_probs)))
         for chosen_belief in choice:
             for rock_loc in chosen_belief:
                 interveened_agents_rock_probs = chosen_belief.copy()
-                interveened_agents_rock_probs[rock_loc] = self.real_rock_probs[rock_loc]
+                no_interveen_rock_probs.append(interveened_agents_rock_probs)
 
+                interveened_agents_rock_probs = interveened_agents_rock_probs.copy()
+                interveened_agents_rock_probs[rock_loc] = self.real_rock_probs[rock_loc]
                 interveen_rock_probs.append(interveened_agents_rock_probs)
                 rocks_locs.append(rock_loc)
 
-        return interveen_rock_probs, rocks_locs
+        return no_interveen_rock_probs, interveen_rock_probs, rocks_locs
 
     def enter_inner_simulation_mode(self, beliefs: Dict[tuple, Dict[SampleObservation, float]]):
         self.in_a_simulation = True
         self._real_agents_beliefs = self.rock_probs
         self.rock_probs = beliefs
-
         self._real_agents_sample_counts = self.sample_count.copy()
 
     def exit_inner_simulation_mode(self):
@@ -130,8 +134,7 @@ class OracleAgent(Agent):
             self.enter_inner_simulation_mode(rock_prob.copy())
             inner_env = MultiAgentRobotEnv(state.agents)
             formatted_changed_rock_loc = f"{changed_rock_loc[0]}_{changed_rock_loc[1]}" if changed_rock_loc is not None else "None"
-            sum_rewards.append(run_one_episode(inner_env,
-                                               schema_name=f"oracle_simulations_{state.cur_step}_{formatted_changed_rock_loc}"))
+            sum_rewards.append(run_one_episode(inner_env, schema_name=f"oracle_simulations_{state.cur_step}_{formatted_changed_rock_loc}", skip_reset=True))
             self.exit_inner_simulation_mode()
 
         return sum_rewards
@@ -157,5 +160,3 @@ class OracleAgent(Agent):
             new_agents_rock_probs.extend([bad_rock_belief, good_rock_belief])
 
         self.agents_rock_probs = new_agents_rock_probs
-
-# TODO better planning course - somthing the includes the sample prob

@@ -11,7 +11,7 @@ import numpy as np
 
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
 from Multi_Agent_Robot.multi_agent_robot.env.types import RockTile, CellType, SampleObservation, RobotActions, Action, \
-    OracleActions
+    OracleActions, State
 from Multi_Agent_Robot.multi_agent_robot.ui.gui import RockGui
 from config import config
 from typing import Tuple, List, Dict
@@ -138,10 +138,10 @@ class MultiAgentRobotEnv(AECEnv):
             self._gui = RockGui(self.state)
         return self._gui
 
-    def step(self, action: Action = None):
+    def step(self, action: Action = None, skip_agent_update=False)->tuple:
         agent = self.agents[self.agent_selection]
-        action = agent.act(self.state, self.history)
-        observation, reward, done, robot_observation = None, 0, False, SampleObservation.NO_OBS
+        action = action or agent.act(self.state, self.history)
+        observation, reward, done, robot_observation = SampleObservation.NO_OBS, 0, False, SampleObservation.NO_OBS
 
         if action.action_type == RobotActions.SAMPLE:
             robot_observation = self.sample_rock(self.agent_selection, action.rock_sample_loc)
@@ -161,21 +161,23 @@ class MultiAgentRobotEnv(AECEnv):
             reward += 10
 
         # Update belief vector with respect to each agent
-        agent_beliefs, oracles_beliefs, oracle_action = agent.update(self.state, reward, action, observation, self.history)
-        self.history.update(
-            cur_agent = self.agent_selection,
-            action=action,
-            observation=robot_observation,
-            reward=reward,
-            players_pos=self._agent_locations,
-            agent_beliefs=agent_beliefs,
-            oracle_action=oracle_action,
-            oracle_beliefs=oracles_beliefs)
+        if not skip_agent_update:
+            agent_beliefs, oracles_beliefs, oracle_action = agent.update(self.state, reward, action, observation, self.history)
+            self.history.update(
+                cur_agent = self.agent_selection,
+                action=action,
+                observation=robot_observation,
+                reward=reward,
+                players_pos=self._agent_locations,
+                agent_beliefs=agent_beliefs,
+                oracle_action=oracle_action,
+                oracle_beliefs=oracles_beliefs,
+                state=self.state
+            )
 
-        observation = self.state.board, agent_beliefs
         self.update_state()
         truncated = False
-        return observation, reward, done, truncated, self.state
+        return robot_observation, reward, done, truncated, self.state
 
     def remove_rock(self, agent_pos, new_agent_pos):
         reward = 0
@@ -245,36 +247,15 @@ class MultiAgentRobotEnv(AECEnv):
         self.state.rocks_map = self.rocks_map
 
 
-class State(BaseModel):
-    cur_step: int
-    board: np.ndarray
-    grid_size: Tuple[int, int]
-    sample_prob: float
-    agents: List[Agent]
-    agent_locations: List[Tuple[int, int]]
-    agent_selection: int
-    rocks: List[RockTile]
-    rocks_map: Dict[Tuple[int, int], RockTile]
-    gas_fee: float
-    start_pt: Tuple[int, int]
-    end_pt: Tuple[int, int]
 
-    class Config:
-        arbitrary_types_allowed = True
-
-    def current_agent_location(self):
-        return self.agent_locations[self.agent_selection]
-
-    def collected_rocks(self) -> List[bool]:
-        return [rt.picked for rt in self.rocks]
-
-
-def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=False, schema_name="env"):
+def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=False, schema_name="env", skip_reset=False, max_steps=None):
     data_api = DataApi(force_recreate=force_recreate_tables, schema=schema_name)
-    env.reset()
+    if not skip_reset:
+        env.reset()
+
     total_reward = 0
 
-    for i in range(env.MAX_STEPS):
+    for i in range(max_steps or env.MAX_STEPS):
         done = False
         for _ in env.agent_iter():
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 from Multi_Agent_Robot.multi_agent_robot.agent import init_agent
-from Multi_Agent_Robot.multi_agent_robot.data.data_utils import graph_baysian_agents_beliefs
 from Multi_Agent_Robot.multi_agent_robot.env.multi_agent_robot import MultiAgentRobotEnv, run_one_episode
 from config import config
+
 
 def main():
     # first, create the custom environment and run it for one episode

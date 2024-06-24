@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel
-from Multi_Agent_Robot.multi_agent_robot.env.types import Action, SampleObservation, OracleActions
+from Multi_Agent_Robot.multi_agent_robot.env.types import Action, SampleObservation, OracleActions, State
 
 MAX_PLAYERS = 4
 
@@ -14,10 +14,11 @@ class HistoryStep(BaseModel):
     agent_beliefs: List[str]
     oracle_action: Optional[Action] = None
     oracle_beliefs: Optional[List[str]] = None
+    state: Optional[State] = None
 
     def to_arr(self):
         action = self.action.action_type.name if self.action is not None else ""
-        oracle_action = self.oracle_action.action_type.name if self.action is not None else ""
+        oracle_action = self.oracle_action.action_type.name if self.oracle_action is not None else ""
         action_rock_sample_loc = str(self.action.rock_sample_loc) if self.action is not None else ""
         observation_name = self.observation.name if self.observation is not None else ""
         return [self.cur_agent,

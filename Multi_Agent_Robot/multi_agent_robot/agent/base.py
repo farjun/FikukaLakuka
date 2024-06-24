@@ -26,7 +26,7 @@ class Agent(abc.ABC):
         return np.linalg.norm(np.asarray(list(state["rocks_dict"].keys())) - np.asarray(state["current_agent_location"]), axis=1, ord=1)
 
     def calc_distance(self, state, loc: Tuple[int, int]) -> np.float64:
-        return np.linalg.norm(np.asarray(loc) - state["current_agent_location"], ord=1)
+        return np.linalg.norm(np.asarray(loc) - state.current_agent_location(), ord=1)
 
     def calc_dijkstra_distance(self, graph_matrix: np.array):
         csr_graph_matrix = csr_matrix(graph_matrix)

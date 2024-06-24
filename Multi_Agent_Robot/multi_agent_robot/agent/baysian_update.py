@@ -51,6 +51,8 @@ class BayesianBeliefAgent(OracleAgent):
         agent_confidenc = abs(sum([self.rock_probs[r][SampleObservation.GOOD_ROCK] for r in self.rock_probs]) / len(self.rock_probs) - 0.5)
         if agent_confidenc < 0.2:
             target_loc, sample_count = min(self.sample_count.items(), key=lambda x: x[1] + abs(0.5-self.rock_probs[x[0]][SampleObservation.GOOD_ROCK])*100)
+            if self.calc_distance(state, target_loc) > 7:
+                return Action(action_type=self.go_towards(state, target_loc))
             return Action(action_type=RobotActions.SAMPLE, rock_sample_loc=target_loc)
 
         return Action(action_type=self.go_towards(state, target_loc))

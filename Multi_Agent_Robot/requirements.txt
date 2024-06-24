@@ -3,6 +3,7 @@ gymnasium
 pygame
 pydantic
 numpy
+numba
 pandas
 scikit-learn
 scipy
@@ -10,3 +11,6 @@ confuse
 matplotlib
 gym
 dijkstar
+future>=0.16
+stable-baselines3>=2.0.0
+supersuit>=3.9.0
