@@ -35,6 +35,9 @@ class RockTile(BaseModel):
     def __str__(self):
         return f"RockTile: {self.loc}, {self.reward}, {self.picked}"
 
+    def __eq__(self, other):
+        return self.loc == other.loc
+
 
 class RobotActions(Enum):
     UP = 0
@@ -68,15 +71,21 @@ class Action(BaseModel):
 
     @staticmethod
     def all_actions(state = None):
-        all_actions = [
-            Action(action_type=RobotActions.UP),
-            Action(action_type=RobotActions.DOWN),
-            Action(action_type=RobotActions.RIGHT),
-            Action(action_type=RobotActions.LEFT),
-        ]
-        for rock in config.get_in_game_context("environment", "rocks"):
-            if state and not state.rocks_map[rock].picked:
-                all_actions.append(Action(action_type=RobotActions.SAMPLE, rock_sample_loc=rock))
+        cur_agent_loc = state.agent_locations[state.agent_selection]
+
+        all_actions = []
+        if cur_agent_loc[0] > 0:
+            all_actions.append(Action(action_type=RobotActions.UP))
+        if cur_agent_loc[0] < len(state.board)-1:
+            all_actions.append(Action(action_type=RobotActions.DOWN))
+        if cur_agent_loc[1] > 0:
+            all_actions.append(Action(action_type=RobotActions.LEFT))
+        if cur_agent_loc[1] < len(state.board) - 1:
+            all_actions.append(Action(action_type=RobotActions.RIGHT))
+
+        for rock in state.rocks:
+            if state and not rock.picked:
+                all_actions.append(Action(action_type=RobotActions.SAMPLE, rock_sample_loc=rock.loc))
 
         return all_actions
 
@@ -105,13 +114,16 @@ class State(BaseModel):
     agent_locations: List[Tuple[int, int]]
     agent_selection: int
     rocks: List[RockTile]
-    rocks_map: Dict[Tuple[int, int], RockTile]
     gas_fee: float
     start_pt: Tuple[int, int]
     end_pt: Tuple[int, int]
 
     # IState
     agents_rocks_beliefs: Optional[List[float]] = []  # is good rock
+
+    @property
+    def rocks_map(self)->Dict[Tuple[int, int], RockTile]:
+        return {r.loc: r for r in self.rocks}
 
     class Config:
         arbitrary_types_allowed = True
@@ -123,7 +135,7 @@ class State(BaseModel):
         return [rt.picked for rt in self.rocks]
 
     def __str__(self):
-        return f"State: {self.cur_step}, {self.board}, {self.grid_size}, {self.sample_prob}, {self.agent_locations}, {self.agent_selection}, {self.rocks}"
+        return f"State: {self.cur_step}, {self.board}, {self.grid_size}, {self.sample_prob}, {self.agent_locations}, {self.agent_selection}, {self.rocks} {self.agents_rocks_beliefs}"
 
     def __hash__(self):
         res = hash(str(self))
@@ -133,6 +145,10 @@ class State(BaseModel):
 
     @staticmethod
     def from_hash(h: str) -> "State":
+        return STATE_MAP[h]
+
+    @staticmethod
+    def to_index(h: str) -> "State":
         return STATE_MAP[h]
 
     def get_all_possible_belief_states(self) -> List["State"]:
@@ -150,5 +166,13 @@ class State(BaseModel):
     def num_of_possible_states(self)->int:
         return 2 ** len([r for r in self.rocks if not r.picked])
 
+    def get_state_index(self, state):
+        return state
+
+    def deep_copy(self):
+        self_copy = self.copy(deep=True, exclude={'board', 'agents'})
+        self_copy.board = self.board
+        self_copy.agents = self.agents
+        return self_copy
 
 STATE_MAP = {}

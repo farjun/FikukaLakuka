@@ -4,6 +4,7 @@ from typing import List, Tuple
 import numpy as np
 from dijkstar import find_path
 
+from Multi_Agent_Robot.multi_agent_robot.agent.base import Agent
 from Multi_Agent_Robot.multi_agent_robot.agent.oracle import OracleAgent
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
 from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, RobotActions
@@ -61,7 +62,7 @@ class BayesianBeliefAgent(OracleAgent):
         oracle_action = self.oracle_act(state, last_action, observation, history)
 
         if not history.past:
-            return *self.get_beliefs_as_db_repr(state), oracle_action
+            return self.get_beliefs_as_db_repr(state, self.rock_probs), oracle_action
 
         if last_action.action_type == RobotActions.SAMPLE:
             self.sample_count[last_action.rock_sample_loc] += 1
@@ -71,16 +72,7 @@ class BayesianBeliefAgent(OracleAgent):
             self.rock_probs[last_action.rock_sample_loc] = {SampleObservation.GOOD_ROCK: good_rock_prob,
                                                             SampleObservation.BAD_ROCK: bad_rock_prob}
 
-        return *self.get_beliefs_as_db_repr(state), oracle_action
-
-    def get_beliefs_as_db_repr(self, state) -> Tuple[List[str], List[str]]:
-        oracle_beliefs = self.get_oracles_beliefs_as_db_repr(state)
-        beliefs = list()
-        for rock in state.rocks:
-            rock_beliefs = self.rock_probs[rock.loc]
-            beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
-
-        return beliefs, oracle_beliefs
+        return self.get_beliefs_as_db_repr(state, self.rock_probs), self.get_oracles_beliefs_as_db_repr(state), oracle_action
 
     def get_rock_beliefs(self) -> List[str]:
         return self.rock_probs

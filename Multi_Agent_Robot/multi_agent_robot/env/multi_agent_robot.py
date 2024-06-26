@@ -35,7 +35,7 @@ class MultiAgentRobotEnv(AECEnv):
         self.end_pt: List[int] = config.get_in_game_context("environment", "end")
         self.sample_prob: float = config.get_in_game_context("environment", "sample_prob")
         self.gas_fee: float = config.get_in_game_context("environment", "gas_fee")
-        self.agent_selection: int = config.get_in_game_context("environment", "starting_agent")
+        agent_selection: int = config.get_in_game_context("environment", "starting_agent")
 
         # Derive constants from the configurations
         self.agent_types: List[str] = ["oracle" if agent == "oracle" else "robot" for agent in self.agents]
@@ -71,7 +71,7 @@ class MultiAgentRobotEnv(AECEnv):
 
         # Define the board as a 2D array of zeros
         self._board = np.zeros(self.grid_size, dtype=int)
-        self._agent_locations = [self.start_pt.copy() for _ in range(self.num_agents)]
+        agent_locations = [self.start_pt.copy() for _ in range(self.num_agents)]
 
         # Set board values for start, end and rocks
         self._board[self.start_pt[0], self.start_pt[1]] = CellType.START.value
@@ -81,14 +81,14 @@ class MultiAgentRobotEnv(AECEnv):
 
         # Set the current state
         self.state = State(
-            cur_step = len(self.history.past),
+            cur_step = 0,
             board=self._board,
-            agent_selection=self.agent_selection,
+            agent_selection=agent_selection,
             grid_size=self.grid_size,
             sample_prob=self.sample_prob,
             agents=self.agents,
-            agent_locations=self._agent_locations,
-            current_agent_location=self._agent_locations[self.agent_selection],
+            agent_locations=agent_locations,
+            current_agent_location=agent_locations[agent_selection],
             rocks_reward=self.rocks_reward_arr,
             rocks=self.rocks_arr,
             rocks_map=self.rocks_map,
@@ -104,6 +104,10 @@ class MultiAgentRobotEnv(AECEnv):
     def collected_rocks(self):
         return [rock.picked for rock in self.rocks_map.values()]
 
+    @property
+    def agent_selection(self)->int:
+        return self.state.agent_selection
+
     def sample(self):
         agent = self.agents[self.agent_selection]
         action = agent.act(self.state, self.history)
@@ -115,20 +119,18 @@ class MultiAgentRobotEnv(AECEnv):
         :return:
         """
         # Reset the board as a 2D array of zeros
-        self._board = np.zeros(self.grid_size, dtype=int)
-        self._agent_locations = [self.start_pt.copy() for _ in range(self.num_agents)]
+        self.state.board = np.zeros(self.grid_size, dtype=int)
+        self.state.agent_locations = [self.start_pt.copy() for _ in range(self.num_agents)]
 
         # Set board values for start, end and rocks
-        self._board[self.start_pt[0], self.start_pt[1]] = CellType.START.value
-        self._board[self.end_pt[0], self.end_pt[1]] = CellType.END.value
+        self.state.board[self.start_pt[0], self.start_pt[1]] = CellType.START.value
+        self.state.board[self.end_pt[0], self.end_pt[1]] = CellType.END.value
 
         # Reset the rocks
         for rock in self.rocks_arr:
-            self.rocks_map[rock.loc].picked = False
-            self._board[rock.loc[0], rock.loc[1]] = CellType.ROCK.value
+            rock.picked = False
+            self.state.board[rock.loc[0], rock.loc[1]] = CellType.ROCK.value
 
-        # Reset the current state
-        self.update_state()
         # Set the GUI
         self._gui = None
 
@@ -141,22 +143,22 @@ class MultiAgentRobotEnv(AECEnv):
     def step(self, action: Action = None, skip_agent_update=False)->tuple:
         agent = self.agents[self.agent_selection]
         action = action or agent.act(self.state, self.history)
-        observation, reward, done, robot_observation = SampleObservation.NO_OBS, 0, False, SampleObservation.NO_OBS
+        observation, reward, done = SampleObservation.NO_OBS, 0, False
 
         if action.action_type == RobotActions.SAMPLE:
-            robot_observation = self.sample_rock(self.agent_selection, action.rock_sample_loc)
+            observation = self.sample_rock(self.agent_selection, action.rock_sample_loc)
         else:  # Action is a movement action
             reward -= self.gas_fee
             # Update location
-            agent_pos = self._agent_locations[self.agent_selection]
-            board_x, board_y = self._board.shape
+            agent_pos = self.state.agent_locations[self.agent_selection]
+            board_x, board_y = self.state.board.shape
             new_agent_pos = self.move_robot(action, agent_pos, board_x, board_y)
-            self._board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
-            self._board[new_agent_pos[0], new_agent_pos[1]] = CellType.ROBOT1.value
-            self._agent_locations[self.agent_selection] = new_agent_pos
+            self.state.board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
+            self.state.board[new_agent_pos[0], new_agent_pos[1]] = CellType.ROBOT1.value
+            self.state.agent_locations[self.agent_selection] = new_agent_pos
             reward += self.remove_rock(agent_pos, tuple(new_agent_pos))
 
-        if self._agent_locations[self.agent_selection] == self.end_pt:
+        if self.state.agent_locations[self.state.agent_selection] == self.end_pt:
             done = True
             reward += 10
 
@@ -166,30 +168,32 @@ class MultiAgentRobotEnv(AECEnv):
             self.history.update(
                 cur_agent = self.agent_selection,
                 action=action,
-                observation=robot_observation,
+                observation=observation,
                 reward=reward,
-                players_pos=self._agent_locations,
+                players_pos=self.state.agent_locations,
                 agent_beliefs=agent_beliefs,
                 oracle_action=oracle_action,
                 oracle_beliefs=oracles_beliefs,
                 state=self.state
             )
 
-        self.update_state()
         truncated = False
-        return robot_observation, reward, done, truncated, self.state
+        self.state.cur_step +=1
+        return observation, reward, done, truncated, self.state
 
     def remove_rock(self, agent_pos, new_agent_pos):
         reward = 0
-        if new_agent_pos in self.rocks_map.keys() and not self.rocks_map[new_agent_pos].picked:
-            rock = self.rocks_map[new_agent_pos]
+        if new_agent_pos in self.state.rocks_map.keys() and not self.state.rocks_map[new_agent_pos].picked:
+            rock = self.state.rocks_map[new_agent_pos]
             rock.picked = True
             reward = rock.reward
-            self._board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
+            self.state.board[agent_pos[0], agent_pos[1]] = CellType.EMPTY.value
+
         return reward
 
     @staticmethod
-    def move_robot(action, agent_pos, board_x, board_y):
+    def move_robot(action, agent_pos:tuple, board_x, board_y):
+        agent_pos = list(agent_pos)
         if action.action_type == RobotActions.LEFT:
             agent_pos[1] = max([0, agent_pos[1] - 1])
         elif action.action_type == RobotActions.RIGHT:
@@ -215,7 +219,7 @@ class MultiAgentRobotEnv(AECEnv):
         return self.action_spaces[agent]
 
     def sample_rock(self, agent, rock_loc: Tuple[int, int]) -> SampleObservation:
-        agent_location = self._agent_locations[agent]
+        agent_location = self.state.agent_locations[agent]
         dist = np.linalg.norm(np.array(agent_location) - np.array(rock_loc), ord=1)
         p = self.calc_sample_prob(dist)
         rock = self.rocks_map[rock_loc]
@@ -239,12 +243,6 @@ class MultiAgentRobotEnv(AECEnv):
 
     def _convert_to_dict(self, list_of_list):
         return dict(zip(self.agents, list_of_list))
-
-    def update_state(self):
-        self.state.board = self._board
-        self.state.agent_locations = self._agent_locations
-        self.state.agent_selection = self.agent_selection
-        self.state.rocks_map = self.rocks_map
 
 
 

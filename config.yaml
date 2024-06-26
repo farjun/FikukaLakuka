@@ -1,9 +1,30 @@
 
 general:
   db_name: test
-  game_to_run: robots2
+  game_to_run: robots_small
 
 games:
+  robots_small:
+    seed: 101
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 100
+    playing_agents:
+      - pomcp
+    environment:
+      sample_prob: 0.9
+      gas_fee: 0.1
+      discount_reward: 1
+      information_cost: 10
+      grid_size: [ 8,8 ]
+      rocks: [ [1,1], [2,2], [3,3],[4,4], [ 0,5 ], [ 1,5 ], [ 0,6 ], [ 6,0 ] ]
+      rocks_reward: [ 15, 15, 15, 15, -15, -15, -15, 15 ]
+      end_pt_reward: 3
+      start: [ 0,0 ]
+      end: [ 7,7 ]
+      starting_agent: 0
+
   robots2:
     seed: 101
     gym_params:
@@ -15,7 +36,7 @@ games:
     environment:
       sample_prob: 0.9
       gas_fee: 0.1
-      discount_reward : 1
+      discount_reward : 0.9
       information_cost: 10
       grid_size: [15,15]
       rocks: [[0,14], [1,14], [0,13], [12,0]]
@@ -26,7 +47,7 @@ games:
       starting_agent: 0
 
 agents:
-  robots:
+  robots_small:
     PPOtest:
       name : PPOtest
     random:
@@ -35,6 +56,12 @@ agents:
       name: algo
     bbu:
       name: bbu
+    pomcp:
+      name: pomcp
+      simulation_time: 15
+      max_simulation_depth: 5
+      max_particles: 20
+      c: 50
 
   robots2:
     PPOtest:
@@ -47,11 +74,10 @@ agents:
       name: bbu
     pomcp:
       name: pomcp
-      timeout: 15
-      no_particles: 20
-      max_simulation_depth: 5
-      max_particles: 80
-      c: 0.5
+      simulation_time: 100
+      max_simulation_depth: 15
+      max_particles: 20
+      c: 50
     manual:
       name: manual
     const:

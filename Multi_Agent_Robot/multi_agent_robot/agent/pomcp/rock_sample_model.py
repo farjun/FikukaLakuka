@@ -24,16 +24,11 @@ class RockSampleModel(object):
         """
         self.costs = {}
         self.discount_reward = config.get_in_game_context("environment", "discount_reward")
-        self.actions = Action.all_actions()
         self.observations = None
         self.max_depth = None
 
     def num_states(self, state:State)->int:
         return state.num_of_possible_states()
-
-    @property
-    def num_actions(self):
-        return len(self.actions)
 
     def gen_particles(self, state: State, n, prob=None):
         states = state.get_all_possible_belief_states()
@@ -42,19 +37,19 @@ class RockSampleModel(object):
             prob = [1 / len(states)] * len(states)
         return [hash(states[draw_arg(prob)]) for i in range(n)]
 
-    def get_legal_actions(self, state):
+    def get_legal_actions(self, state:State):
         """
         Simplest situation is every action is legal, but the actual model class
         may handle it differently according to the specific knowledge domain
         :param state:
         :return: actions selectable at the given state
         """
-        return self.actions
+        return Action.all_actions(state)
 
     def cost_function(self, action):
         if not self.costs:
             return 0
-        return self.costs[self.actions.index(action)]
+        return self.costs[action]
 
     def simulate_action(self, state: State, ai: Action = None):
         """
@@ -65,6 +60,7 @@ class RockSampleModel(object):
         return: next state, observation and reward
         """
         env = MultiAgentRobotEnv(state.agents)
+        env.state = state.deep_copy()
         observation, reward, done, truncated, info = env.step(action=ai, skip_agent_update=True)
         return hash(env.state), observation, reward, 0
 

@@ -47,8 +47,8 @@ def elem_distribution(arr):
     return {k: v / _sum for k, v in cnt.items()}
 
 
-def rand_choice(candidates):
-    return np.random.choice(candidates)
+def rand_choice(candidates, p=None):
+    return np.random.choice(candidates, p=p)
 
 ######################################
 # High performance utility functions #
@@ -73,9 +73,9 @@ def randint(low, high, seed=None):
 
 
 @jit(nopython=True)
-def ucb(N_h, N_ha):
-    if N_h == 0:
+def ucb(parent_visit_count, action_visit_count):
+    if parent_visit_count == 0:
         return 0.0
-    if N_ha == 0:
+    if action_visit_count == 0:
         return MAX
-    return np.sqrt(np.log(N_h) / N_ha)  # Upper-Confidence-Bound
+    return np.sqrt(np.log(parent_visit_count) / action_visit_count)  # Upper-Confidence-Bound

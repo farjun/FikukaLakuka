@@ -1,6 +1,6 @@
 import abc
 from abc import abstractmethod
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 import numpy as np
 from dijkstar import Graph
@@ -9,7 +9,7 @@ from scipy.sparse.csgraph import shortest_path
 from scipy.spatial.distance import cdist
 
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
-from Multi_Agent_Robot.multi_agent_robot.env.types import Action, RobotActions, SampleObservation
+from Multi_Agent_Robot.multi_agent_robot.env.types import Action, RobotActions, SampleObservation, State
 from config import config
 
 
@@ -89,9 +89,6 @@ class Agent(abc.ABC):
             dists.append(abs(agent_location[0] - rock.loc[0]) + abs(agent_location[1] - rock.loc[1]))
         return dists
 
-    def get_beliefs_as_db_repr(self, state) -> np.ndarray:
-        return np.zeros(len(state["rocks_dict"]))
-
     def get_rock_beliefs(self):
         raise NotImplementedError
 
@@ -129,3 +126,11 @@ class Agent(abc.ABC):
             good_rock_prob = max([posterior_good_rock_given_bad_observation, 0])
             bad_rock_prob = 1 - good_rock_prob
         return bad_rock_prob, good_rock_prob
+
+    def get_beliefs_as_db_repr(self, state:State, rock_probs:Dict) -> List[str]:
+        beliefs = list()
+        for rock in state.rocks:
+            rock_beliefs = rock_probs[rock.loc]
+            beliefs.append(f"{rock.loc}:{rock_beliefs[SampleObservation.GOOD_ROCK]}")
+
+        return beliefs

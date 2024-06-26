@@ -1,4 +1,6 @@
+from typing import Union, List
 
+from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, State, RobotActions
 from .helper import rand_choice, round
 from abc import abstractmethod
 
@@ -33,8 +35,16 @@ class BeliefNode(Node):
         Node.__init__(self, nid, name, h, parent, value, visit_count)
         self.observation = obs_index
         self.budget = budget
-        self.B = []
+        self.belief_states: List[str] = []
         self.action_map = {}
+        self.belief_states_match_obs_count: List[int] = []
+
+    @property
+    def belief_states_probs(self)->List[float]:
+        obs_count_sum = sum(self.belief_states_match_obs_count)
+        if obs_count_sum == 0:
+            return None
+        return [1/obs_count_sum*count for count in self.belief_states_match_obs_count]
 
     def add_child(self, node):
         self.children.append(node)
@@ -44,16 +54,35 @@ class BeliefNode(Node):
         return self.action_map.get(action)
 
     def sample_state(self):
-        return rand_choice(self.B)
+        return rand_choice(self.belief_states, p=self.belief_states_probs)
 
-    def add_particle(self, particle):
+    def add_particle(self, particle: Union[list,str]):
         if type(particle) is list:
-            self.B.extend(particle)
+            self.belief_states.extend(particle)
+            self.belief_states_match_obs_count.extend([0]*len(particle))
         else:
-            self.B.append(particle)
+            self.belief_states.append(particle)
+            self.belief_states_match_obs_count.append(0)
+
+
+
+    def update_particles_beliefs(self, state:State, observation:SampleObservation, action: Action):
+        """
+        Updates the belief distribution given the observation and action
+        """
+        if action.action_type is not RobotActions.SAMPLE:
+            return
+        sampled_rock_index = state.rocks.index(state.rocks_map[action.rock_sample_loc])
+        for i, state_hash in enumerate(self.belief_states):
+            state = State.from_hash(state_hash)
+            if state.agents_rocks_beliefs[sampled_rock_index] == observation.value:
+                self.belief_states_match_obs_count[i] += 1
+            else:
+                self.belief_states_match_obs_count[i] += 0.5
+
 
     def __repr__(self):
-        return 'Bid = {}, N = {}'.format(self.id, self.visit_count)
+        return 'BeliefNode({}, visits = {})'.format(self.observation, self.visit_count)
 
 
 class ActionNode(Node):
@@ -80,7 +109,7 @@ class ActionNode(Node):
         return self.obs_map.get(observation, None)
 
     def __repr__(self):
-        return 'Aid = {}, N = {}, V = {}'.format(self.id, self.visit_count, round(self.value, 6))
+        return 'Action({}, visits = {}, value = {})'.format(self.action, self.visit_count, round(self.value, 6))
 
 
 class BeliefTree:
@@ -95,14 +124,15 @@ class BeliefTree:
         self.nodes = {}
         self.root = self.add(history=[], name='root', particle=root_particles, budget=total_budget)
 
-    def __pretty_print__(self, root, depth):
+    def __pretty_print__(self, root, depth, skip_unvisited = False):
         if not root.children:
             # the leaf
             return
 
         for node in root.children:
-            print('|  ' * depth + str(node))
-            self.__pretty_print__(node, depth + 1)
+            if (skip_unvisited and node.visit_count > 0) or not skip_unvisited:
+                print('|  ' * depth + str(node))
+                self.__pretty_print__(node, depth + 1, skip_unvisited=skip_unvisited)
 
     def add(self, history, name, parent=None, action=None, observation=None,
             particle=None, budget=None, cost=None):
@@ -122,23 +152,23 @@ class BeliefTree:
 
         # instantiate node
         if action is not None:
-            n = ActionNode(self.counter, name, history, parent=parent, action_index=action, cost=cost)
+            node = ActionNode(self.counter, name, history, parent=parent, action_index=action, cost=cost)
         else:
-            n = BeliefNode(self.counter, name, history, parent=parent, obs_index=observation, budget=budget)
+            node = BeliefNode(self.counter, name, history, parent=parent, obs_index=observation, budget=budget)
 
         if particle is not None:
-            n.add_particle(particle)
+            node.add_particle(particle)
 
         # add the node to belief tree
-        self.nodes[n.id] = n
+        self.nodes[node.id] = node
         self.counter += 1
 
         # register node as parent's child
         if parent is not None:
-            parent.add_child(n)
-        return n
+            parent.add_child(node)
+        return node
 
-    def find_or_create(self, h, **kwargs):
+    def find_or_create(self, h, **kwargs)->Union[BeliefNode, ActionNode]:
         """
         Search for the node corrresponds to given history, otherwise create one using given params
         """
@@ -170,9 +200,9 @@ class BeliefTree:
         for sb in siblings:
             self.prune(sb)
 
-    def pretty_print(self):
+    def pretty_print(self, skip_unvisited = False):
         """
          pretty prints tree's structure
         """
         print(self.root)
-        self.__pretty_print__(self.root, depth=1)
+        self.__pretty_print__(self.root, depth=1, skip_unvisited=skip_unvisited)

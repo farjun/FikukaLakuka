@@ -9,8 +9,9 @@ import numpy as np
 import time
 
 from ..base import Agent
+from ..oracle import OracleAgent
 from ...env.history import History
-from ...env.types import Action, State
+from ...env.types import Action, State, SampleObservation, RobotActions
 
 MAX = np.inf
 
@@ -45,26 +46,25 @@ UTILITY_FUNCTION_MAP = {
     'sa_ucb': UtilityFunction.sa_ucb
 }
 
-class POMCPAgent(Agent):
+class POMCPAgent(OracleAgent):
     def __init__(self, config_params: dict):
+        super().__init__(config_params)
         self.tree = None
         self.simulation_time = None  # in seconds
         self.max_particles = None    # maximum number of particles can be supplied by hand for a belief node
         self.reinvigorated_particles_ratio = None  # ratio of max_particles to mutate
         self.max_simulation_depth = None  # ratio of max_particles to mutate
-        self.budget = 0
+        self.budget = 1
 
         self.config_params = config_params
         self.add_configs(**config_params)
         self.model = RockSampleModel()
 
-    def add_configs(self, name: str, simulation_time=0.5, timeout=30,
-                    max_particles=80, reinvigorated_particles_ratio=0.1, utility_fn='ucb1', max_simulation_depth=5, no_particles = 1000, c=0.5):
+    def add_configs(self, name: str, simulation_time=0.5,
+                    max_particles=80, reinvigorated_particles_ratio=0.1, utility_fn='ucb1', max_simulation_depth=5, c=0.5):
         # acquaire utility function to choose the most desirable action to try
         self.name = name
         self.utility_fn = UTILITY_FUNCTION_MAP[utility_fn](c)
-        self.timeout = timeout
-        self.no_particles = no_particles
 
         # other configs
         self.simulation_time = simulation_time
@@ -77,12 +77,17 @@ class POMCPAgent(Agent):
         root_particles = self.model.gen_particles(state, n=self.max_particles)
         self.tree = BeliefTree(self.budget, root_particles)
 
-    def compute_belief(self, state: State):
-        base = [0.0] * self.model.num_states(state)
-        particle_dist = elem_distribution(self.tree.root.B)
-        for state, prob in particle_dist.items():
-            base[self.model.states.index(state)] = round(prob, 6)
-        return base
+    def update_belief(self, state: str, last_action: Action, observation: SampleObservation):
+        if last_action.action_type is RobotActions.SAMPLE:
+            rock_prob = self.rock_probs[last_action.rock_sample_loc]
+            bad_rock_prob, good_rock_prob = self.get_bu_rock_probs(last_action.rock_sample_loc, rock_prob, observation, state)
+            self.rock_probs[last_action.rock_sample_loc] = {SampleObservation.GOOD_ROCK: good_rock_prob,
+                                                            SampleObservation.BAD_ROCK: bad_rock_prob}
+
+        # particle_dist = elem_distribution(self.tree.root.belief_states)
+        # for state, prob in particle_dist.items():
+        #     particle_dist[state] = round(prob, 6)
+        # return particle_dist
 
     def rollout(self, state:State, h, depth, max_depth, budget):
         """
@@ -99,9 +104,9 @@ class POMCPAgent(Agent):
         ai = rand_choice(self.model.get_legal_actions(state))
         sj, oj, r, cost = self.model.simulate_action(state, ai)
 
-        return r + self.model.discount_reward * self.rollout(sj, h + [ai, oj], depth + 1, max_depth, budget - cost)
+        return r + self.model.discount_reward * self.rollout(State.from_hash(sj), h + [ai, oj], depth + 1, max_depth, budget - cost)
         
-    def simulate(self, state_hash, max_depth, depth=0, h=[], parent=None, budget=None):
+    def simulate(self, state_hash:str, max_depth, depth=0, cur_history=[], parent=None, budget=None):
         """
         Perform MCTS simulation on a POMCP belief search tree
         :param state_hash: starting state's index
@@ -111,43 +116,44 @@ class POMCPAgent(Agent):
         if depth > max_depth:
             return 0
 
-        obs_h = None if not h else h[-1]
-        node_h = self.tree.find_or_create(h, name=obs_h or 'root', parent=parent,
+        obs_h = None if not cur_history else cur_history[-1]
+        belief_node = self.tree.find_or_create(cur_history, name=obs_h or 'root', parent=parent,
                                           budget=budget, observation=obs_h)
 
         # ===== ROLLOUT =====
         # Initialize child nodes and return an approximate reward for this
         # history by rolling out until max depth
-        if not node_h.children:
-            # always reach this line when node_h was just now created
+        if not belief_node.children:
+            # always reach this line when belief_node was just now created
             for ai in self.model.get_legal_actions(State.from_hash(state_hash)):
                 cost = self.model.cost_function(ai)
                 # only adds affordable actions
                 if budget - cost >= 0:
-                    self.tree.add(h + [ai], name=ai, parent=node_h, action=ai, cost=cost)
+                    self.tree.add(cur_history + [ai], name=ai, parent=belief_node, action=ai, cost=cost)
 
-            return self.rollout(state_hash, h, depth, max_depth, budget)
+            return self.rollout(State.from_hash(state_hash), cur_history, depth, max_depth, budget)
 
         # ===== SELECTION =====
         # Find the action that maximises the utility value
-        np.random.shuffle(node_h.children)
-        node_ha = sorted(node_h.children, key=self.utility_fn, reverse=True)[0]
+        np.random.shuffle(belief_node.children)
+        action_node = sorted(belief_node.children, key=self.utility_fn, reverse=True)[0]
 
         # ===== SIMULATION =====
         # Perform monte-carlo simulation of the state under the action
-
-        sj, oj, reward, cost = self.model.simulate_action(State.from_hash(state_hash), node_ha.action)
-        R = reward + self.model.discount_reward * self.simulate(sj, max_depth, depth + 1, h=h + [node_ha.action, oj],
-                                                                parent=node_ha, budget=budget-cost)
+        state = State.from_hash(state_hash)
+        sj, oj, reward, cost = self.model.simulate_action(state, action_node.action)
+        R = reward + self.model.discount_reward * self.simulate(sj, max_depth, depth + 1, cur_history=cur_history + [action_node.action, oj],
+                                                                parent=action_node, budget=budget-cost)
         # ===== BACK-PROPAGATION =====
         # Update the belief node for h
-        node_h.B += [state_hash]
-        node_h.visit_count += 1
+        belief_node.add_particle(state_hash)
+        belief_node.visit_count += 1
+        belief_node.update_particles_beliefs(state, oj, action_node.action)
 
         # Update the action node for this action
-        node_ha.update_stats(cost, reward)
-        node_ha.visit_count += 1
-        node_ha.value += (R - node_ha.value) / node_ha.visit_count
+        action_node.update_stats(cost, reward)
+        action_node.visit_count += 1
+        action_node.value += (R - action_node.value) / action_node.visit_count
 
         return R
 
@@ -157,12 +163,13 @@ class POMCPAgent(Agent):
         """
         if not self.tree:
             self.init_search_tree(state)
+
         begin = time.time()
         n = 0
         while time.time() - begin < self.simulation_time:
             n += 1
             state = self.tree.root.sample_state()
-            self.simulate(state, max_depth=self.max_simulation_depth, h=self.tree.root.history, budget=self.tree.root.budget)
+            self.simulate(state, max_depth=self.max_simulation_depth, cur_history=self.tree.root.history, budget=self.tree.root.budget)
         log.info('# Simulation = {}'.format(n))
 
     def get_action(self):
@@ -175,7 +182,7 @@ class POMCPAgent(Agent):
         return max(action_vals)[1]
 
 
-    def update(self, state:  State, reward: float, last_action: Action, observation, history: History) -> Tuple[List[str], List[str]]:
+    def update(self, state:  State, reward: float, last_action: Action, observation: SampleObservation, history: History) -> Tuple[List[str], List[str]]:
         """
         Updates the belief tree given the environment feedback.
         extending the history, updating particle sets, etc
@@ -204,29 +211,27 @@ class POMCPAgent(Agent):
         ##################
         # Fill Particles #
         ##################
-        particle_slots = self.max_particles - len(new_root.B)
-        if particle_slots > 0:
-            # fill particles by Monte-Carlo using reject sampling
-            particles = []
-            while len(particles) < particle_slots:
-                state_hash_i = root.sample_state()
-                sj, oj, r, cost = self.model.simulate_action(State.from_hash(state_hash_i), last_action)
+        while len(new_root.belief_states) < self.max_particles:
+            state_hash_i = root.sample_state()
+            sj, oj, r, cost = self.model.simulate_action(State.from_hash(state_hash_i), last_action)
 
-                if oj == observation:
-                    particles.append(sj)
-            new_root.B += particles
+            if oj == observation:
+                new_root.add_particle(sj)
+                new_root.update_particles_beliefs(State.from_hash(sj), oj, last_action)
+
 
         #####################
         # Advance and Prune #
         #####################
         self.tree.prune(root, exclude=new_root)
         self.tree.root = new_root
-        new_belief = self.compute_belief(state)
-        return new_belief
+        self.update_belief(state, last_action, observation)
+        return self.get_beliefs_as_db_repr(state, self.rock_probs), None, None
 
     def act(self, state: State, history: History):
         self.solve(state)
-        return self.get_action()
+        action = self.get_action()
+        return action
 
     def draw(self, beliefs):
         """
