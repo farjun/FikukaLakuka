@@ -84,11 +84,6 @@ class POMCPAgent(OracleAgent):
             self.rock_probs[last_action.rock_sample_loc] = {SampleObservation.GOOD_ROCK: good_rock_prob,
                                                             SampleObservation.BAD_ROCK: bad_rock_prob}
 
-        # particle_dist = elem_distribution(self.tree.root.belief_states)
-        # for state, prob in particle_dist.items():
-        #     particle_dist[state] = round(prob, 6)
-        # return particle_dist
-
     def rollout(self, state:State, h, depth, max_depth, budget):
         """
         Perform randomized recursive rollout search starting from 'h' util the max depth has been achived
@@ -103,7 +98,6 @@ class POMCPAgent(OracleAgent):
 
         ai = rand_choice(self.model.get_legal_actions(state))
         sj, oj, r, cost = self.model.simulate_action(state, ai)
-
         return r + self.model.discount_reward * self.rollout(State.from_hash(sj), h + [ai, oj], depth + 1, max_depth, budget - cost)
         
     def simulate(self, state_hash:str, max_depth, depth=0, cur_history=[], parent=None, budget=None):
@@ -148,7 +142,9 @@ class POMCPAgent(OracleAgent):
         # Update the belief node for h
         belief_node.add_particle(state_hash)
         belief_node.visit_count += 1
-        belief_node.update_particles_beliefs(state, oj, action_node.action)
+        if action_node.action.action_type is RobotActions.SAMPLE:
+            bad_rock_prob, good_rock_prob = self.get_bu_rock_probs(action_node.action.rock_sample_loc, self.rock_probs[action_node.action.rock_sample_loc], oj, state)
+            belief_node.update_particles_beliefs(state, action_node.action, oj, good_rock_prob)
 
         # Update the action node for this action
         action_node.update_stats(cost, reward)
@@ -170,7 +166,7 @@ class POMCPAgent(OracleAgent):
             n += 1
             state = self.tree.root.sample_state()
             self.simulate(state, max_depth=self.max_simulation_depth, cur_history=self.tree.root.history, budget=self.tree.root.budget)
-        log.info('# Simulation = {}'.format(n))
+        log.info('number of simulations done = {}'.format(n))
 
     def get_action(self):
         """
@@ -178,7 +174,7 @@ class POMCPAgent(OracleAgent):
         'belief' is just a part of the function signature but not actually required here
         """
         root = self.tree.root
-        action_vals = [(action.value, action.action) for action in root.children]
+        action_vals = [(action.value, action) for action in root.children]
         return max(action_vals)[1]
 
 
@@ -187,6 +183,7 @@ class POMCPAgent(OracleAgent):
         Updates the belief tree given the environment feedback.
         extending the history, updating particle sets, etc
         """
+        # oracle_action = self.oracle_act(state, last_action, observation, history)
         root = self.tree.root
 
         #####################
@@ -217,7 +214,10 @@ class POMCPAgent(OracleAgent):
 
             if oj == observation:
                 new_root.add_particle(sj)
-                new_root.update_particles_beliefs(State.from_hash(sj), oj, last_action)
+                if last_action.action_type is RobotActions.SAMPLE:
+                    bad_rock_prob, good_rock_prob = self.get_bu_rock_probs(last_action.rock_sample_loc,
+                                                       self.rock_probs[last_action.rock_sample_loc], oj, state)
+                    new_root.update_particles_beliefs(state, last_action, oj, good_rock_prob)
 
 
         #####################
@@ -226,12 +226,15 @@ class POMCPAgent(OracleAgent):
         self.tree.prune(root, exclude=new_root)
         self.tree.root = new_root
         self.update_belief(state, last_action, observation)
-        return self.get_beliefs_as_db_repr(state, self.rock_probs), None, None
+        return self.get_beliefs_as_db_repr(state, self.rock_probs), None, None #self.get_oracles_beliefs_as_db_repr(state), oracle_action
 
     def act(self, state: State, history: History):
+        if all(state.collected_rocks()):
+            return self.go_to_exit(state)
         self.solve(state)
         action = self.get_action()
-        return action
+        print(f"preforming action {action} assuming beliefs are {self.rock_probs}")
+        return action.action
 
     def draw(self, beliefs):
         """

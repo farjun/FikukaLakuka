@@ -1,6 +1,6 @@
 from typing import Union, List
 
-from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, State, RobotActions
+from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, State, RobotActions, RockTile
 from .helper import rand_choice, round
 from abc import abstractmethod
 
@@ -66,19 +66,19 @@ class BeliefNode(Node):
 
 
 
-    def update_particles_beliefs(self, state:State, observation:SampleObservation, action: Action):
+    def update_particles_beliefs(self, state: State, action: Action, observation: SampleObservation, good_rock_prob: float):
         """
         Updates the belief distribution given the observation and action
         """
-        if action.action_type is not RobotActions.SAMPLE:
-            return
         sampled_rock_index = state.rocks.index(state.rocks_map[action.rock_sample_loc])
         for i, state_hash in enumerate(self.belief_states):
             state = State.from_hash(state_hash)
-            if state.agents_rocks_beliefs[sampled_rock_index] == observation.value:
-                self.belief_states_match_obs_count[i] += 1
+
+            if int(state.rocks[sampled_rock_index].reward > 0) == observation.value:
+                # good observation on a belief state set this rock to a good rock
+                self.belief_states_match_obs_count[i] = good_rock_prob
             else:
-                self.belief_states_match_obs_count[i] += 0.5
+                self.belief_states_match_obs_count[i] = 1 - good_rock_prob
 
 
     def __repr__(self):

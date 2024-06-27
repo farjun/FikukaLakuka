@@ -70,13 +70,13 @@ class Action(BaseModel):
             return Action(action_type=action_type)
 
     @staticmethod
-    def all_actions(state = None):
+    def all_actions(state=None):
         cur_agent_loc = state.agent_locations[state.agent_selection]
 
         all_actions = []
         if cur_agent_loc[0] > 0:
             all_actions.append(Action(action_type=RobotActions.UP))
-        if cur_agent_loc[0] < len(state.board)-1:
+        if cur_agent_loc[0] < len(state.board) - 1:
             all_actions.append(Action(action_type=RobotActions.DOWN))
         if cur_agent_loc[1] > 0:
             all_actions.append(Action(action_type=RobotActions.LEFT))
@@ -118,11 +118,8 @@ class State(BaseModel):
     start_pt: Tuple[int, int]
     end_pt: Tuple[int, int]
 
-    # IState
-    agents_rocks_beliefs: Optional[List[float]] = []  # is good rock
-
     @property
-    def rocks_map(self)->Dict[Tuple[int, int], RockTile]:
+    def rocks_map(self) -> Dict[Tuple[int, int], RockTile]:
         return {r.loc: r for r in self.rocks}
 
     class Config:
@@ -135,7 +132,7 @@ class State(BaseModel):
         return [rt.picked for rt in self.rocks]
 
     def __str__(self):
-        return f"State: {self.cur_step}, {self.board}, {self.grid_size}, {self.sample_prob}, {self.agent_locations}, {self.agent_selection}, {self.rocks} {self.agents_rocks_beliefs}"
+        return f"State: {self.cur_step}, {self.board}, {self.grid_size}, {self.sample_prob}, {self.agent_locations}, {self.agent_selection}, {self.rocks}"
 
     def __hash__(self):
         res = hash(str(self))
@@ -153,17 +150,17 @@ class State(BaseModel):
 
     def get_all_possible_belief_states(self) -> List["State"]:
         possible_states = []
-        items = [1, 0]
+        items = [1, -1]
         not_picked_rocks = [r for r in self.rocks if not r.picked]
         for rock_beliefs in product(items, repeat=len(not_picked_rocks)):
             s_dict = self.dict()
-            s_dict["agents_rocks_beliefs"] = rock_beliefs
+            s_dict["rocks"] = [RockTile(loc=r.loc, reward=rb*r.reward) for rb, r in zip(rock_beliefs,self.rocks)]
             s = State(**s_dict)
             possible_states.append(s)
 
         return possible_states
 
-    def num_of_possible_states(self)->int:
+    def num_of_possible_states(self) -> int:
         return 2 ** len([r for r in self.rocks if not r.picked])
 
     def get_state_index(self, state):
@@ -174,5 +171,6 @@ class State(BaseModel):
         self_copy.board = self.board
         self_copy.agents = self.agents
         return self_copy
+
 
 STATE_MAP = {}

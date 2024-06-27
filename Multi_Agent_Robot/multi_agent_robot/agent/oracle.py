@@ -128,13 +128,17 @@ class OracleAgent(Agent):
         self.rock_probs = self._real_agents_beliefs
         self.sample_count = self._real_agents_sample_counts
 
-    def simulate_agent_run(self, state: State, rock_probs: List[dict], changed_rock_locs: List[tuple]) -> List[float]:
+    def simulate_agent_run(self, state: State, rock_probs: List[dict], changed_rock_locs: List[tuple], steps=10) -> List[float]:
         sum_rewards = list()
         for rock_prob, changed_rock_loc in zip(rock_probs, changed_rock_locs):
             self.enter_inner_simulation_mode(rock_prob.copy())
-            inner_env = MultiAgentRobotEnv(state.agents)
-            formatted_changed_rock_loc = f"{changed_rock_loc[0]}_{changed_rock_loc[1]}" if changed_rock_loc is not None else "None"
-            sum_rewards.append(run_one_episode(inner_env, schema_name=f"oracle_simulations_{state.cur_step}_{formatted_changed_rock_loc}", skip_reset=True))
+            env = MultiAgentRobotEnv(state.agents)
+            env.state = state.deep_copy()
+            total_reward = 0
+            for _ in range(steps):
+                observation, reward, done, truncated, info = env.step()
+                total_reward += reward
+            sum_rewards.append(total_reward)
             self.exit_inner_simulation_mode()
 
         return sum_rewards

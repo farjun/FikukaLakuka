@@ -58,8 +58,8 @@ agents:
       name: bbu
     pomcp:
       name: pomcp
-      simulation_time: 15
-      max_simulation_depth: 5
+      simulation_time: 10
+      max_simulation_depth: 8
       max_particles: 20
       c: 50
 
