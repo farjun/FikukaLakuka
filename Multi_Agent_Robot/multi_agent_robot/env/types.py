@@ -40,12 +40,12 @@ class RockTile(BaseModel):
 
 
 class RobotActions(Enum):
-    UP = 0
-    DOWN = 1
-    LEFT = 2
-    RIGHT = 3
-    SAMPLE = 4
-    NUM_OF_ACTIONS = 5
+    UP = "Up"
+    DOWN = "Down"
+    LEFT = "Left"
+    RIGHT = "Right"
+    SAMPLE = "Sample"
+    NUM_OF_ACTIONS = "Num of Actions"
 
 
 class OracleActions(Enum):
@@ -62,7 +62,7 @@ class Action(BaseModel):
     @staticmethod
     def sample(rock_sample_loc=None):
         rocks_arr = config.get_in_game_context("environment", "rocks")
-        action_type = RobotActions(random.randint(0, int(RobotActions.NUM_OF_ACTIONS.value) - 1))
+        action_type = list(iter(RobotActions))[random.randint(0, 4)]
         if action_type == RobotActions.SAMPLE:
             rock_sample_loc = rock_sample_loc or rocks_arr[random.randint(0, len(rocks_arr) - 1)]
             return Action(action_type=action_type, rock_sample_loc=rock_sample_loc)
@@ -91,6 +91,9 @@ class Action(BaseModel):
 
     def __str__(self):
         return f"Action: {self.action_type}, {self.rock_sample_loc}"
+
+    def ui_repr(self):
+        return f"{self.action_type.value}{self.rock_sample_loc or ''}"
 
     def __hash__(self):
         return hash(str(self))

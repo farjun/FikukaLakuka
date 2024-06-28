@@ -26,7 +26,7 @@ games:
       end: [ 7,7 ]
       starting_agent: 0
 
-  robots2:
+  robots:
     seed: 101
     gym_params:
       id: RobotsEnv-v0
@@ -49,40 +49,20 @@ games:
       starting_agent: 0
 
 agents:
-  robots_small:
-    PPOtest:
-      name : PPOtest
-    random:
-      name: random
-    algo:
-      name: algo
-    bbu:
-      name: bbu
-    pomcp:
-      name: pomcp
-      simulation_time: 4
-      max_simulation_depth: 6
-      max_particles: 20
-      c: 50
+  PPOtest:
+    name : PPOtest
+  random:
+    name: random
+  algo:
+    name: algo
+  bbu:
+    name: bbu
+  pomcp:
+    name: pomcp
+    simulation_time: 2
+    max_simulation_depth: 8
+    max_particles: 30
+    c: 50
 
-  robots2:
-    PPOtest:
-      name : PPOtest
-    random:
-      name: random
-    algo:
-      name: algo
-    bbu:
-      name: bbu
-    pomcp:
-      name: pomcp
-      simulation_time: 100
-      max_simulation_depth: 15
-      max_particles: 20
-      c: 50
-    manual:
-      name: manual
-    const:
-      name: const
 assets:
 

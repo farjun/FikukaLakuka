@@ -31,7 +31,7 @@ class Config(object):
         return self.get(*args, start_at=game_conf)
 
     def get_in_agent_context(self, *args):
-        game_conf = self._config["agents"][self.cur_game]
+        game_conf = self._config["agents"]
         return self.get(*args, start_at=game_conf)
 
 

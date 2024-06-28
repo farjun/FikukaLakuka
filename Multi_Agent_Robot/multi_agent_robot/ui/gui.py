@@ -2,6 +2,7 @@ import os
 from typing import Dict, Tuple
 import pygame
 
+from Multi_Agent_Robot.multi_agent_robot.env.types import State
 from Multi_Agent_Robot.multi_agent_robot.ui.coord import Coord, Tile
 
 PATH = os.path.split(__file__)[0]
@@ -115,9 +116,9 @@ class RockGui(GridGui):
             self.board[self._as_ui_pt(state, state.agent_locations[agent_id])].draw(
                 img=self.assets["_ROBOT" + str(agent_id)])
 
-    def render(self, state, msg=None):
+    def render(self, state: State, msg:str):
         self.draw(state)
-        # self.task_bar(msg)
+        self.task_bar(msg)
         pygame.display.update()
         GridGui._dispatch()
 

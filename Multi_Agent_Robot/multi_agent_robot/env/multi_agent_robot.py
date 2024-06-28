@@ -81,6 +81,7 @@ class MultiAgentRobotEnv(AECEnv):
         for rock in self.rocks_arr:
             self._board[rock.loc[0], rock.loc[1]] = CellType.ROCK.value
 
+        self.last_preformed_action = None
         # Set the current state
         self.state = State(
             cur_step = 0,
@@ -145,6 +146,7 @@ class MultiAgentRobotEnv(AECEnv):
     def step(self, action: Action = None, skip_agent_update=False)->tuple:
         agent = self.agents[self.agent_selection]
         action = action or agent.act(self.state, self.history)
+        self.last_preformed_action = action
         observation, reward, done = SampleObservation.NO_OBS, 0, False
 
         if action.action_type == RobotActions.SAMPLE:
@@ -212,7 +214,7 @@ class MultiAgentRobotEnv(AECEnv):
         if close:
             return
         if mode == "human":
-            self.gui.render(self.state)
+            self.gui.render(self.state, msg=repr(self.last_preformed_action.ui_repr()))
         else:
             print(self._board)
 

@@ -165,14 +165,14 @@ class POMCPAgent(OracleAgent):
         log.info('number of simulations done = {}'.format(n))
         return state
 
-    def get_action(self):
+    def get_action(self)->ActionNode:
         """
         Choose the action maximises V
         'belief' is just a part of the function signature but not actually required here
         """
         root = self.tree.root
         action_vals = [(action.value, action) for action in root.children]
-        return max(action_vals)[1]
+        return max(action_vals, key=lambda x:x[0])[1]
 
 
     def update(self, state:  State, reward: float, last_action: Action, observation: SampleObservation, history: History) -> Tuple[List[str], List[str]]:
@@ -228,7 +228,7 @@ class POMCPAgent(OracleAgent):
             return self.go_to_exit(state)
         simulated_state = self.solve(state)
         action = self.get_action()
-        print(f"preforming action {action} assuming beliefs are {self.rock_probs}")
+        print(f"preforming action {action.action} assuming beliefs are {self.rock_probs}")
         return action.action
 
     def draw(self, beliefs):

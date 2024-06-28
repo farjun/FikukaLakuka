@@ -108,7 +108,7 @@ class ActionNode(Node):
         return self.obs_map.get(observation, None)
 
     def __repr__(self):
-        return 'Action({}, visits = {}, value = {})'.format(self.action, self.visit_count, round(self.value, 6))
+        return 'ActionNode({}, visits = {}, value = {})'.format(self.action, self.visit_count, round(self.value, 6))
 
 
 class BeliefTree:
