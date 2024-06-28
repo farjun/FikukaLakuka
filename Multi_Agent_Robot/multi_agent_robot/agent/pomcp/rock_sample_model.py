@@ -35,7 +35,7 @@ class RockSampleModel(object):
         if prob is None:
             # by default use uniform distribution for particles generation
             prob = [1 / len(states)] * len(states)
-        return [hash(states[draw_arg(prob)]) for i in range(n)]
+        return [states[draw_arg(prob)] for i in range(n)]
 
     def get_legal_actions(self, state:State):
         """
@@ -62,7 +62,7 @@ class RockSampleModel(object):
         env = MultiAgentRobotEnv(state.agents)
         env.state = state.deep_copy()
         observation, reward, done, truncated, info = env.step(action=ai, skip_agent_update=True)
-        return hash(env.state), observation, reward, 0
+        return env.state, observation, reward, 0
 
     def take_action(self, action):
         """

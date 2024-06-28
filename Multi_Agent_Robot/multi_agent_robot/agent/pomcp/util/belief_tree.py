@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import Union, List, Dict
 
 from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, State, RobotActions, RockTile
 from .helper import rand_choice, round
@@ -12,7 +12,7 @@ class Node(object):
         self.id = nid
         self.name = name
         self.parent = parent
-        self.children = []
+        self.children : Union[List[ActionNode], List[BeliefNode]]= []
 
     @abstractmethod
     def add_child(self, node):
@@ -35,16 +35,16 @@ class BeliefNode(Node):
         Node.__init__(self, nid, name, h, parent, value, visit_count)
         self.observation = obs_index
         self.budget = budget
-        self.belief_states: List[str] = []
+        self.belief_states: List[State] = []
         self.action_map = {}
-        self.belief_states_match_obs_count: List[int] = []
+        self.belief_states_agg_probs: List[int] = []
 
     @property
     def belief_states_probs(self)->List[float]:
-        obs_count_sum = sum(self.belief_states_match_obs_count)
+        obs_count_sum = sum(self.belief_states_agg_probs)
         if obs_count_sum == 0:
             return None
-        return [1/obs_count_sum*count for count in self.belief_states_match_obs_count]
+        return [1 / obs_count_sum * count for count in self.belief_states_agg_probs]
 
     def add_child(self, node):
         self.children.append(node)
@@ -56,33 +56,32 @@ class BeliefNode(Node):
     def sample_state(self):
         return rand_choice(self.belief_states, p=self.belief_states_probs)
 
-    def add_particle(self, particle: Union[list,str]):
+    def add_particle(self, particle: List[State]):
         if type(particle) is list:
             self.belief_states.extend(particle)
-            self.belief_states_match_obs_count.extend([0]*len(particle))
+            self.belief_states_agg_probs.extend([0] * len(particle))
         else:
             self.belief_states.append(particle)
-            self.belief_states_match_obs_count.append(0)
+            self.belief_states_agg_probs.append(0)
 
 
 
-    def update_particles_beliefs(self, state: State, action: Action, observation: SampleObservation, good_rock_prob: float):
+    def update_particles_beliefs(self, state: State, action: Action, observation: SampleObservation, rock_probs: Dict[SampleObservation, float]):
         """
         Updates the belief distribution given the observation and action
         """
         sampled_rock_index = state.rocks.index(state.rocks_map[action.rock_sample_loc])
         for i, state_hash in enumerate(self.belief_states):
-            state = State.from_hash(state_hash)
+            state = state_hash
 
             if int(state.rocks[sampled_rock_index].reward > 0) == observation.value:
                 # good observation on a belief state set this rock to a good rock
-                self.belief_states_match_obs_count[i] = good_rock_prob
+                self.belief_states_agg_probs[i] = rock_probs[SampleObservation.GOOD_ROCK]
             else:
-                self.belief_states_match_obs_count[i] = 1 - good_rock_prob
-
+                self.belief_states_agg_probs[i] = rock_probs[SampleObservation.BAD_ROCK]
 
     def __repr__(self):
-        return 'BeliefNode({}, visits = {})'.format(self.observation, self.visit_count)
+        return 'BeliefNode({}, visits = {}, cur_belief_probs={})'.format(self.observation, self.visit_count, self.belief_states_probs)
 
 
 class ActionNode(Node):

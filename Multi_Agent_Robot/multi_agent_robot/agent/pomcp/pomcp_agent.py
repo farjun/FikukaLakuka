@@ -96,14 +96,14 @@ class POMCPAgent(OracleAgent):
         if depth > max_depth or budget <= 0:
             return 0
 
-        ai = rand_choice(self.model.get_legal_actions(state))
-        sj, oj, r, cost = self.model.simulate_action(state, ai)
-        return r + self.model.discount_reward * self.rollout(State.from_hash(sj), h + [ai, oj], depth + 1, max_depth, budget - cost)
+        random_action = rand_choice(self.model.get_legal_actions(state))
+        sj, oj, r, cost = self.model.simulate_action(state, random_action)
+        return r + self.model.discount_reward * self.rollout(sj, h + [random_action, oj], depth + 1, max_depth, budget - cost)
         
-    def simulate(self, state_hash:str, max_depth, depth=0, cur_history=[], parent=None, budget=None):
+    def simulate(self, state: State, max_depth, depth=0, cur_history=[], parent=None, budget=None):
         """
         Perform MCTS simulation on a POMCP belief search tree
-        :param state_hash: starting state's index
+        :param state: starting state's index
         :return:
         """
         # Stop recursion once we are deep enough in our built tree
@@ -119,13 +119,13 @@ class POMCPAgent(OracleAgent):
         # history by rolling out until max depth
         if not belief_node.children:
             # always reach this line when belief_node was just now created
-            for ai in self.model.get_legal_actions(State.from_hash(state_hash)):
+            for ai in self.model.get_legal_actions(state):
                 cost = self.model.cost_function(ai)
                 # only adds affordable actions
                 if budget - cost >= 0:
                     self.tree.add(cur_history + [ai], name=ai, parent=belief_node, action=ai, cost=cost)
 
-            return self.rollout(State.from_hash(state_hash), cur_history, depth, max_depth, budget)
+            return self.rollout(state, cur_history, depth, max_depth, budget)
 
         # ===== SELECTION =====
         # Find the action that maximises the utility value
@@ -134,17 +134,13 @@ class POMCPAgent(OracleAgent):
 
         # ===== SIMULATION =====
         # Perform monte-carlo simulation of the state under the action
-        state = State.from_hash(state_hash)
         sj, oj, reward, cost = self.model.simulate_action(state, action_node.action)
         R = reward + self.model.discount_reward * self.simulate(sj, max_depth, depth + 1, cur_history=cur_history + [action_node.action, oj],
                                                                 parent=action_node, budget=budget-cost)
         # ===== BACK-PROPAGATION =====
         # Update the belief node for h
-        belief_node.add_particle(state_hash)
+        belief_node.add_particle(state)
         belief_node.visit_count += 1
-        if action_node.action.action_type is RobotActions.SAMPLE:
-            bad_rock_prob, good_rock_prob = self.get_bu_rock_probs(action_node.action.rock_sample_loc, self.rock_probs[action_node.action.rock_sample_loc], oj, state)
-            belief_node.update_particles_beliefs(state, action_node.action, oj, good_rock_prob)
 
         # Update the action node for this action
         action_node.update_stats(cost, reward)
@@ -167,6 +163,7 @@ class POMCPAgent(OracleAgent):
             state = self.tree.root.sample_state()
             self.simulate(state, max_depth=self.max_simulation_depth, cur_history=self.tree.root.history, budget=self.tree.root.budget)
         log.info('number of simulations done = {}'.format(n))
+        return state
 
     def get_action(self):
         """
@@ -209,16 +206,11 @@ class POMCPAgent(OracleAgent):
         # Fill Particles #
         ##################
         while len(new_root.belief_states) < self.max_particles:
-            state_hash_i = root.sample_state()
-            sj, oj, r, cost = self.model.simulate_action(State.from_hash(state_hash_i), last_action)
+            sampled_state = root.sample_state()
+            sj, oj, r, cost = self.model.simulate_action(sampled_state, last_action)
 
             if oj == observation:
                 new_root.add_particle(sj)
-                if last_action.action_type is RobotActions.SAMPLE:
-                    bad_rock_prob, good_rock_prob = self.get_bu_rock_probs(last_action.rock_sample_loc,
-                                                       self.rock_probs[last_action.rock_sample_loc], oj, state)
-                    new_root.update_particles_beliefs(state, last_action, oj, good_rock_prob)
-
 
         #####################
         # Advance and Prune #
@@ -226,12 +218,15 @@ class POMCPAgent(OracleAgent):
         self.tree.prune(root, exclude=new_root)
         self.tree.root = new_root
         self.update_belief(state, last_action, observation)
+        if last_action.action_type is RobotActions.SAMPLE:
+            self.tree.root.update_particles_beliefs(state, last_action, observation, self.rock_probs[last_action.rock_sample_loc])
+
         return self.get_beliefs_as_db_repr(state, self.rock_probs), None, None #self.get_oracles_beliefs_as_db_repr(state), oracle_action
 
     def act(self, state: State, history: History):
         if all(state.collected_rocks()):
             return self.go_to_exit(state)
-        self.solve(state)
+        simulated_state = self.solve(state)
         action = self.get_action()
         print(f"preforming action {action} assuming beliefs are {self.rock_probs}")
         return action.action
@@ -241,3 +236,6 @@ class POMCPAgent(OracleAgent):
         Dummy
         """
         pass
+
+# todo adjust the baysian update to update belief nodes only when a true observation is made
+# sanity for the particles distibution

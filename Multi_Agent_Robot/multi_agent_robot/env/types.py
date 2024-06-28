@@ -132,21 +132,11 @@ class State(BaseModel):
         return [rt.picked for rt in self.rocks]
 
     def __str__(self):
-        return f"State: {self.cur_step}, {self.board}, {self.grid_size}, {self.sample_prob}, {self.agent_locations}, {self.agent_selection}, {self.rocks}"
+        return f"State: {self.cur_step}, {self.grid_size}, {self.sample_prob}, {self.agent_locations}, {self.agent_selection}, {self.rocks}"
 
     def __hash__(self):
         res = hash(str(self))
-        if res not in STATE_MAP:
-            STATE_MAP[res] = self
         return res
-
-    @staticmethod
-    def from_hash(h: str) -> "State":
-        return STATE_MAP[h]
-
-    @staticmethod
-    def to_index(h: str) -> "State":
-        return STATE_MAP[h]
 
     def get_all_possible_belief_states(self) -> List["State"]:
         possible_states = []
@@ -173,4 +163,3 @@ class State(BaseModel):
         return self_copy
 
 
-STATE_MAP = {}

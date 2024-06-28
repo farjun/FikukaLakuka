@@ -13,7 +13,7 @@ def main():
     # (no policy)
     history = []
 
-    sum_reward = run_one_episode(env, verbose=True, use_sleep=True, force_recreate_tables=True)
+    sum_reward = run_one_episode(env, verbose=True, use_sleep=False, force_recreate_tables=True)
     history.append(sum_reward)
 
     avg_sum_reward = sum(history) / len(history)

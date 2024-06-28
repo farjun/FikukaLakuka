@@ -35,6 +35,8 @@ class MultiAgentRobotEnv(AECEnv):
         self.end_pt: List[int] = config.get_in_game_context("environment", "end")
         self.sample_prob: float = config.get_in_game_context("environment", "sample_prob")
         self.gas_fee: float = config.get_in_game_context("environment", "gas_fee")
+        self.sample_gas_fee: float = config.get_in_game_context("environment", "sample_gas_fee")
+
         agent_selection: int = config.get_in_game_context("environment", "starting_agent")
 
         # Derive constants from the configurations
@@ -147,6 +149,8 @@ class MultiAgentRobotEnv(AECEnv):
 
         if action.action_type == RobotActions.SAMPLE:
             observation = self.sample_rock(self.agent_selection, action.rock_sample_loc)
+            reward -= self.sample_gas_fee
+
         else:  # Action is a movement action
             reward -= self.gas_fee
             # Update location
