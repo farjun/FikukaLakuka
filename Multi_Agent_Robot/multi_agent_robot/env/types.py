@@ -24,10 +24,15 @@ class SampleObservation(Enum):
     GOOD_ROCK: int = 1
 
 
-class RockTile(BaseModel):
+class RockTile(object):
     loc: Tuple[int, int]
     reward: float
-    picked: bool = False
+    picked: bool
+
+    def __init__(self, loc, reward, picked=False):
+        self.loc = loc
+        self.reward = reward
+        self.picked = picked
 
     def is_good(self):
         return self.reward > 0
@@ -37,6 +42,9 @@ class RockTile(BaseModel):
 
     def __eq__(self, other):
         return self.loc == other.loc
+
+    def __copy__(self):
+        return RockTile(loc=self.loc, reward=self.reward, picked=self.picked)
 
 
 class RobotActions(Enum):
@@ -76,11 +84,11 @@ class Action(BaseModel):
         all_actions = []
         if cur_agent_loc[0] > 0:
             all_actions.append(Action(action_type=RobotActions.UP))
-        if cur_agent_loc[0] < len(state.board) - 1:
+        if cur_agent_loc[0] < state.grid_size[1] - 1:
             all_actions.append(Action(action_type=RobotActions.DOWN))
         if cur_agent_loc[1] > 0:
             all_actions.append(Action(action_type=RobotActions.LEFT))
-        if cur_agent_loc[1] < len(state.board) - 1:
+        if cur_agent_loc[1] < state.grid_size[0] - 1:
             all_actions.append(Action(action_type=RobotActions.RIGHT))
 
         for rock in state.rocks:
@@ -108,9 +116,8 @@ class Action(BaseModel):
         return self.action_type == other.action_type and self.rock_sample_loc == other.rock_sample_loc
 
 
-class State(BaseModel):
+class State(object):
     cur_step: int
-    board: np.ndarray
     grid_size: Tuple[int, int]
     sample_prob: float
     agents: List[object]  # Agents
@@ -120,6 +127,32 @@ class State(BaseModel):
     gas_fee: float
     start_pt: Tuple[int, int]
     end_pt: Tuple[int, int]
+
+    def __init__(self, cur_step, grid_size, sample_prob,agents, agent_locations, agent_selection, rocks, gas_fee, start_pt, end_pt):
+        self.cur_step = cur_step
+        self.grid_size = grid_size
+        self.sample_prob = sample_prob
+        self.agents = agents
+        self.agent_locations = agent_locations
+        self.agent_selection = agent_selection
+        self.rocks = rocks
+        self.gas_fee = gas_fee
+        self.start_pt = start_pt
+        self.end_pt = end_pt
+
+    def dict(self):
+        return {
+            "cur_step": self.cur_step,
+            "grid_size": self.grid_size,
+            "sample_prob": self.sample_prob,
+            "agents": self.agents,
+            "agent_locations": self.agent_locations,
+            "agent_selection": self.agent_selection,
+            "rocks": self.rocks,
+            "gas_fee": self.gas_fee,
+            "start_pt": self.start_pt,
+            "end_pt": self.end_pt,
+        }
 
     @property
     def rocks_map(self) -> Dict[Tuple[int, int], RockTile]:
@@ -160,9 +193,17 @@ class State(BaseModel):
         return state
 
     def deep_copy(self):
-        self_copy = self.copy(deep=True, exclude={'board', 'agents'})
-        self_copy.board = self.board
-        self_copy.agents = self.agents
-        return self_copy
+        return State(**{
+            "cur_step": self.cur_step,
+            "grid_size": self.grid_size,
+            "sample_prob": self.sample_prob,
+            "agents": self.agents,
+            "agent_locations": self.agent_locations.copy(),
+            "agent_selection": self.agent_selection,
+            "rocks": self.rocks.copy(),
+            "gas_fee": self.gas_fee,
+            "start_pt": self.start_pt,
+            "end_pt": self.end_pt,
+        })
 
 

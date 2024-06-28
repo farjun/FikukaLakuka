@@ -60,9 +60,8 @@ class RockSampleModel(object):
         return: next state, observation and reward
         """
         env = MultiAgentRobotEnv(state.agents)
-        env.state = state.deep_copy()
-        observation, reward, done, truncated, info = env.step(action=ai, skip_agent_update=True)
-        return env.state, observation, reward, 0
+        observation, reward, done, state = env.transotion_state(state.deep_copy(), action=ai)
+        return state, observation, reward, 0
 
     def take_action(self, action):
         """

@@ -16,6 +16,9 @@ class HistoryStep(BaseModel):
     oracle_beliefs: Optional[List[str]] = None
     state: Optional[State] = None
 
+    class Config:
+        arbitrary_types_allowed = True
+
     def to_arr(self):
         action = self.action.action_type.name if self.action is not None else ""
         oracle_action = self.oracle_action.action_type.name if self.oracle_action is not None else ""
