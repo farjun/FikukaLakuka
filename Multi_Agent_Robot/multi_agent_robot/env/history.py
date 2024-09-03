@@ -6,47 +6,68 @@ MAX_PLAYERS = 4
 
 
 class HistoryStep(BaseModel):
-    cur_agent: int
+    cur_step: Optional[int] = None
+    agent_selection: int
+    reward: float = 0
+    agent_locations: List[List[int]]
+    agent_beliefs: Optional[List[str]] = None
+    agent_tree: Optional[str] = None
+    agent_belief_states: Optional[str] = None
+    agent_belief_states_probs: Optional[str] = None
     action: Optional[Action] = None
     observation: Optional[SampleObservation] = None
-    reward: float = 0
-    players_pos: List[List[int]]
-    agent_beliefs: List[str]
     oracle_action: Optional[Action] = None
     oracle_beliefs: Optional[List[str]] = None
     state: Optional[State] = None
+
+    def __repr__(self):
+        return f"Step: {self.reward}, {self.agent_locations}, {self.action}, {self.observation}, {self.oracle_action}"
 
     class Config:
         arbitrary_types_allowed = True
 
     def to_arr(self):
-        action = self.action.action_type.name if self.action is not None else ""
-        oracle_action = self.oracle_action.action_type.name if self.oracle_action is not None else ""
-        action_rock_sample_loc = str(self.action.rock_sample_loc) if self.action is not None else ""
+        action = self.action.db_str() if self.action is not None else ""
+        oracle_action = self.oracle_action.db_str() if self.oracle_action is not None else ""
         observation_name = self.observation.name if self.observation is not None else ""
-        return [self.cur_agent,
+        return [self.cur_step,
+                str(self.agent_locations[self.agent_selection]),
                 action,
-                action_rock_sample_loc,
+                self.reward,
                 observation_name,
-                str(self.players_pos),
+                str(self.agent_locations),
                 str(self.agent_beliefs),
+                str(self.agent_tree),
+                self.agent_belief_states,
+                self.agent_belief_states_probs,
                 oracle_action,
                 str(self.oracle_beliefs)]
 
-    @staticmethod
-    def from_arr(arr: List[int]):
-        return HistoryStep(cur_agent=arr[0], action=arr[1], observation=arr[2], reward=arr[3], players_pos=arr[4], agent_beliefs=arr[5])
-
 
 class History:
+    TABLE_COLUMNS = (
+        "step",
+        "cur_agent_location",
+        "action",
+        "reward",
+        "observation",
+        "agents_locations",
+        "agent_rock_beliefs",
+        "agent_tree",
+        "agent_belief_states",
+        "agent_belief_states_probs",
+        "oracle_action",
+        "oracle_beliefs"
+    )
+
     def __init__(self, past: List[HistoryStep] = None):
         self.past = past or list()
 
-    def update(self, **kawrgs):
-        self.past.append(HistoryStep(**kawrgs))
+    def add_step(self, state: State, **kwargs):
+        self.past.append(HistoryStep(**state.dict(), **kwargs))
 
     def to_db_obj(self) -> List[List[int]]:
         return [step.to_arr() for step in self.past]
 
-    def cur_step(self):
-        return len(self.past)
+    def get_last_step_db_obj(self)->list:
+        return self.past[-1].to_arr()

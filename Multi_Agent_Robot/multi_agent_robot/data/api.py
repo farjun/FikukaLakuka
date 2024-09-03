@@ -8,8 +8,6 @@ from config import config
 
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
 
-HISTORY_TABLE_COLMNS = ("step", "cur_agent", "action", "rock_sample_loc", "observation", "agents_locations", "agent_beliefs", "oracle_action", "oracle_beliefs")
-
 DBS_FOLDER = Path(__file__).parent / "runs"
 
 
@@ -29,44 +27,37 @@ def convert_array(text):
     return np.load(out)
 
 
+# Converts np.array to TEXT when inserting
+sqlite3.register_adapter(np.ndarray, adapt_array)
+
+# Converts TEXT to np.array when selecting
+sqlite3.register_converter("array", convert_array)
+
+sql_con = None
 class DataApi:
+
     def __init__(self, force_recreate=False, db_name: str = None, schema: str = "env"):
-        self.db_name = db_name or config.get("general", "db_name")
-        self.db_path = DBS_FOLDER / f"{config.cur_game}_{self.db_name}"
-        self.agents = config.get_in_game_context("playing_agents")
-        self._db_con = sqlite3.connect(str(self.db_path), detect_types=sqlite3.PARSE_DECLTYPES)
-        self.schema = schema
-
-        # Converts np.array to TEXT when inserting
-        sqlite3.register_adapter(np.ndarray, adapt_array)
-
-        # Converts TEXT to np.array when selecting
-        sqlite3.register_converter("array", convert_array)
-
-        self.create_tables(force_recreate=force_recreate)
-
-    def create_tables(self, force_recreate=False):
-        cur = self._db_con.cursor()
+        self.db_name = db_name or config.get("general", "game_to_run")
+        self.db_path = DBS_FOLDER / self.db_name
         if force_recreate:
             print(f"Dropping all Tables!")
-            cur.execute(f"drop table if exists {self.history_table_name}")
+            self.db_path.unlink(missing_ok=True)
+        self.agents = config.get_in_game_context("playing_agents")
+        self._db_con = sqlite3.connect(str(self.db_path), detect_types=sqlite3.PARSE_DECLTYPES)
+        self.create_run_history_table()
 
+    def create_run_history_table(self, schema_name:str = "env"):
+        cur = self._db_con.cursor()
         cur.execute(
-            f"create table if not exists {self.history_table_name} ("
-                f"step int, "
-                f"cur_agent int, "
-                f"action string, "
-                f"rock_sample_loc string, "
-                f"observation string, "
-                f"agents_locations string, "
-                f"agent_beliefs string,"
-                f"oracle_action string,"
-                f"oracle_beliefs string)"
+            f"create table if not exists {schema_name}_history "
+            f"({','.join([ f'{col} string' for col in History.TABLE_COLUMNS])})"
         )
+        self._db_con.commit()
+        cur.close()
 
     @property
-    def history_table_name(self):
-        return f"{self.schema}_history"
+    def env_history_table_name(self):
+        return f"env.history"
 
     def close(self):
         self._db_con.close()
@@ -74,22 +65,31 @@ class DataApi:
     def commit(self):
         self._db_con.commit()
 
-    def write_history(self, history: History):
+    def write_history(self, history: History, schema: str = "env"):
         cur = self._db_con.cursor()
         for i, step in enumerate(history.to_db_obj()):
-            cur.execute(f"insert into {self.history_table_name} {HISTORY_TABLE_COLMNS} values (?,?,?,?,?,?,?,?,?)",
-                        (i, *step))
+            cur.execute(f"insert into {schema}_history {History.TABLE_COLUMNS} "
+                        f"values ({','.join(['?']*len(History.TABLE_COLUMNS))})", step)
+        self._db_con.commit()
+        cur.close()
+
+    def write_history_step(self, history_step: list, schema: str = "env"):
+        cur = self._db_con.cursor()
+        cur.execute(f"insert into {schema}_history {History.TABLE_COLUMNS} "
+                    f"values ({','.join(['?']*len(History.TABLE_COLUMNS))})", history_step)
         self._db_con.commit()
         cur.close()
 
     def get_history(self, agent: str = None, as_df=True):
         cur = self._db_con.cursor()
-        agents = [it[0] for it in cur.execute(f"select distinct(cur_agent) from {self.history_table_name}").fetchall()]
+        agents = [it[0] for it in cur.execute(f"select distinct(agent_selection) from {self.env_history_table_name}").fetchall()]
         agents_history = list()
         for agent in agents:
-            res = cur.execute(f"select * from {self.history_table_name} {f'where cur_agent={agent}' if agent is not None else ''}").fetchall()
-            agents_history.append(pd.DataFrame(res, columns=HISTORY_TABLE_COLMNS))
+            res = cur.execute(f"select * from {self.env_history_table_name} {f'where agent_selection={agent}' if agent is not None else ''}").fetchall()
+            agents_history.append(pd.DataFrame(res, columns=History.TABLE_COLUMNS))
 
         cur.close()
 
         return agents_history
+
+

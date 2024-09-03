@@ -1,4 +1,3 @@
-import random
 import time
 import numpy as np
 
@@ -7,8 +6,7 @@ from collections import Counter
 from functools import wraps
 
 
-np.random.seed()
-random.seed()
+np.random.seed(0)
 MAX = np.inf
 
 def timeit(comment=None):
@@ -79,3 +77,9 @@ def ucb(parent_visit_count, action_visit_count):
     if action_visit_count == 0:
         return MAX
     return np.sqrt(np.log(parent_visit_count) / action_visit_count)  # Upper-Confidence-Bound
+
+def mult_on_axis(a, b, axis = 0):
+    dim_array = np.ones((1, a.ndim), int).ravel()
+    dim_array[axis] = -1
+    b_reshaped = b.reshape(dim_array)
+    return a * b_reshaped

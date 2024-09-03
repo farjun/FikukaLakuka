@@ -18,14 +18,6 @@ class DataUtils:
         agents_history = self.data_api.get_history(as_df=True)
         return agents_history
 
-
-# todo
-# add POMCP
-# add sample quality to reward
-# implement an oracle which intervenes as a function of cost - puts 1 or 0 in the belief
-# maybe the play can address the oracle?
-# train an NN to see if the env will need a intervention (Meta oracle)
-
 # ofra and sarit kraus
 from config import config
 
@@ -36,7 +28,7 @@ def run_state_clustering():
     plot_3d_data(clustered_states, "baysian update states")
 
 
-def graph_baysian_agents_beliefs(db_name=config.get("general", "db_name")):
+def graph_baysian_agents_beliefs(db_name=config.get("general", "game_to_run")):
     data_api = DataApi(db_name=db_name)
     du = DataUtils(data_api)
     agents_histories = du.get_history_by_agent()

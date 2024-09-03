@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import confuse as confuse
@@ -12,6 +13,7 @@ class Config(object):
         self._config.set_file(path)
         self._setup_script_args()
         self.cur_game = self.args.game or str(self._config["general"]["game_to_run"])
+
     def _setup_script_args(self):
         parser = argparse.ArgumentParser(
             prog='Robots',
@@ -20,6 +22,7 @@ class Config(object):
         parser.add_argument("-g", "--game", type=str)
         self.args = parser.parse_args()
 
+    @lru_cache(maxsize=1000)
     def get(self, *args, start_at=None):
         cur_pos = start_at if start_at is not None else self._config
         for path_key in args:

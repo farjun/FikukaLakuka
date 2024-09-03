@@ -1,8 +1,14 @@
+from abc import abstractmethod
+from copy import copy
 from typing import Union, List, Dict
 
-from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, State, RobotActions, RockTile
+import numpy as np
+
+from config import config
+from Multi_Agent_Robot.multi_agent_robot.env.types import SampleObservation, Action, State, RobotActions
+from . import mult_on_axis
 from .helper import rand_choice, round
-from abc import abstractmethod
+
 
 class Node(object):
     def __init__(self, nid, name, h, parent=None, value=0, visit_count=0):
@@ -12,7 +18,7 @@ class Node(object):
         self.id = nid
         self.name = name
         self.parent = parent
-        self.children : Union[List[ActionNode], List[BeliefNode]]= []
+        self.children: Union[List[ActionNode], List[BeliefNode]] = []
 
     @abstractmethod
     def add_child(self, node):
@@ -26,70 +32,91 @@ class Node(object):
          To be implemented.
         """
 
+
 class BeliefNode(Node):
     """
     Represents a node that holds the belief distribution given its history sequence in a belief tree.
     It also holds the received observation after which the belief is updated accordingly
     """
+
     def __init__(self, nid, name, h, obs_index, parent=None, value=0, visit_count=0, budget=float('inf')):
         Node.__init__(self, nid, name, h, parent, value, visit_count)
         self.observation = obs_index
         self.budget = budget
         self.belief_states: List[State] = []
         self.action_map = {}
-        self.belief_states_agg_probs: List[int] = []
+        self.belief_states_probs: np.array = []
+        self.belief_states_rock_mask: np.ndarray = None
 
-    @property
-    def belief_states_probs(self)->List[float]:
-        obs_count_sum = sum(self.belief_states_agg_probs)
-        if obs_count_sum == 0:
-            return None
-        return [1 / obs_count_sum * count for count in self.belief_states_agg_probs]
 
     def add_child(self, node):
         self.children.append(node)
         self.action_map[node.action] = node
 
-    def get_child(self, action):
+    def get_child(self, action: Action):
         return self.action_map.get(action)
 
-    def sample_state(self):
-        return rand_choice(self.belief_states, p=self.belief_states_probs)
+    def sample_state(self, rock_probs) -> State:
+        if len(self.belief_states) != len(self.belief_states_probs):
+            self.update_particles_beliefs(rock_probs)
+        return rand_choice(self.belief_states, p=self.belief_states_probs).deep_copy()
 
     def add_particle(self, particle: List[State]):
         if type(particle) is list:
             self.belief_states.extend(particle)
-            self.belief_states_agg_probs.extend([0] * len(particle))
+            new_rock_mask = []
+            for p in particle:
+                new_rock_mask.append([r.reward for r in p.rocks])
+
+            new_rock_mask = np.asarray(new_rock_mask)
         else:
+            new_rock_mask = np.asarray([[r.reward for r in particle.rocks]])
             self.belief_states.append(particle)
-            self.belief_states_agg_probs.append(0)
+
+        new_rock_mask = (new_rock_mask / (State.ASSUMED_ROCK_REWARD * 2)) + 0.5
+        if self.belief_states_rock_mask is None:
+            self.belief_states_rock_mask = new_rock_mask
+        else:
+            self.belief_states_rock_mask = np.concatenate((self.belief_states_rock_mask, new_rock_mask))
 
 
-
-    def update_particles_beliefs(self, state: State, action: Action, observation: SampleObservation, rock_probs: Dict[SampleObservation, float]):
+    def update_particles_beliefs(self, rock_probs: dict[tuple, dict[SampleObservation, float]]):
         """
         Updates the belief distribution given the observation and action
         """
-        sampled_rock_index = state.rocks.index(state.rocks_map[action.rock_sample_loc])
-        for i, state_hash in enumerate(self.belief_states):
-            state = state_hash
+        rock_probs_arr = np.asarray([[rock_probs[r.loc][SampleObservation.GOOD_ROCK], rock_probs[r.loc][SampleObservation.BAD_ROCK]] for r in self.belief_states[0].rocks])
+        bad_rock_mask =  1 - self.belief_states_rock_mask
+        good_rocks_res = mult_on_axis(self.belief_states_rock_mask, rock_probs_arr.T[0], axis=1)
+        bad_rocks_res = mult_on_axis(bad_rock_mask, rock_probs_arr.T[1], axis=1)
+        states_probs = np.prod(good_rocks_res + bad_rocks_res, axis=1)
 
-            if int(state.rocks[sampled_rock_index].reward > 0) == observation.value:
-                # good observation on a belief state set this rock to a good rock
-                self.belief_states_agg_probs[i] = rock_probs[SampleObservation.GOOD_ROCK]
-            else:
-                self.belief_states_agg_probs[i] = rock_probs[SampleObservation.BAD_ROCK]
+        prob_sum = np.sum(states_probs)
+        if prob_sum == 0:
+            states_probs = np.ones(len(states_probs))
+            prob_sum = len(states_probs)
+        self.belief_states_probs = states_probs / prob_sum
 
     def __repr__(self):
-        return 'BeliefNode({}, visits = {}, cur_belief_probs={})'.format(self.observation, self.visit_count, self.belief_states_probs)
+        return 'BeliefNode({}, visits = {})'.format(self.observation, self.visit_count)
+
+    def __copy__(self):
+        bn = BeliefNode(self.id, self.name, self.history, self.observation, self.parent, self.value, self.visit_count,
+                        self.budget)
+        bn.belief_states = self.belief_states.copy()
+        return bn
+
+    def __eq__(self, other):
+        return self.id == other.id
 
 
 class ActionNode(Node):
     """
     represents the node associated with an POMDP action
     """
-    def __init__(self, nid, name, h, action_index, cost, parent=None, value=0, visit_count=0):
+
+    def __init__(self, nid, name, h, action_index:Action, cost, parent=None, value=0, visit_count=0):
         Node.__init__(self, nid, name, h, parent, value, visit_count)
+        self.direct_reward = 0.0
         self.mean_reward = 0.0
         self.mean_cost = 0.0
         self.cost = cost
@@ -99,22 +126,32 @@ class ActionNode(Node):
     def update_stats(self, cost, reward):
         self.mean_cost = (self.mean_cost * self.visit_count + cost) / (self.visit_count + 1)
         self.mean_reward = (self.mean_reward * self.visit_count + reward) / (self.visit_count + 1)
+        self.direct_reward = reward
 
     def add_child(self, node):
         self.children.append(node)
         self.obs_map[node.observation] = node
 
-    def get_child(self, observation):
+    def get_child(self, observation: SampleObservation):
         return self.obs_map.get(observation, None)
 
     def __repr__(self):
-        return 'ActionNode({}, visits = {}, value = {})'.format(self.action, self.visit_count, round(self.value, 6))
+        return 'ActionNode({}, visits = {}, value = {}, reward={})'.format(self.action, self.visit_count, round(self.value, 6), self.direct_reward)
+
+    def __copy__(self):
+        an = ActionNode(self.id, self.name, self.history, self.action, self.cost, self.parent, self.value,
+                        self.visit_count)
+        an.mean_reward = self.mean_reward
+        an.mean_cost = self.mean_cost
+        an.obs_map = self.obs_map.copy()
+        return an
 
 
 class BeliefTree:
     """
     The belief tree decipted in Silver's POMCP paper.
     """
+
     def __init__(self, total_budget, root_particles):
         """
         :param root_particles: particles sampled from the prior belief distribution; used as initial root's particle set
@@ -123,7 +160,24 @@ class BeliefTree:
         self.nodes = {}
         self.root = self.add(history=[], name='root', particle=root_particles, budget=total_budget)
 
-    def __pretty_print__(self, root, depth, skip_unvisited = False):
+    def to_db_str(self, max_depth=4)->str:
+        res_str = str(self.root) + "\n"
+        return self._to_db_str(self.root, 0, res_str, max_depth)
+
+
+    def _to_db_str(self, root, depth, res_str, max_depth=4)->str:
+        if not root.children:
+            # the leaf
+            return res_str
+
+        for node in root.children:
+            if node.visit_count > 0 and depth < max_depth:
+                res_str += '|  ' * depth + str(node) + "\n"
+                res_str = self._to_db_str(node, depth + 1, res_str)
+        return res_str
+
+
+    def __pretty_print__(self, root, depth, skip_unvisited=False):
         if not root.children:
             # the leaf
             return
@@ -133,8 +187,7 @@ class BeliefTree:
                 print('|  ' * depth + str(node))
                 self.__pretty_print__(node, depth + 1, skip_unvisited=skip_unvisited)
 
-    def add(self, history, name, parent=None, action=None, observation=None,
-            particle=None, budget=None, cost=None):
+    def add(self, history, name, parent=None, action=None, observation=None, particle=None, budget=None, cost=None):
         """
         Creates and adds a new belief node or action node to the belief search tree
 
@@ -162,12 +215,11 @@ class BeliefTree:
         self.nodes[node.id] = node
         self.counter += 1
 
-        # register node as parent's child
         if parent is not None:
             parent.add_child(node)
         return node
 
-    def find_or_create(self, h, **kwargs)->Union[BeliefNode, ActionNode]:
+    def find_or_create(self, h, **kwargs) -> Union[BeliefNode, ActionNode]:
         """
         Search for the node corrresponds to given history, otherwise create one using given params
         """
@@ -177,7 +229,8 @@ class BeliefTree:
         for step in range(root_history_len, h_len):
             curr = curr.get_child(h[step])
             if curr is None:
-                return self.add(h, **kwargs)
+                node = self.add(h, **kwargs)
+                return node
         return curr
 
     def prune(self, node, exclude=None):
@@ -199,9 +252,19 @@ class BeliefTree:
         for sb in siblings:
             self.prune(sb)
 
-    def pretty_print(self, skip_unvisited = False):
+    def pretty_print(self, skip_unvisited=False):
         """
          pretty prints tree's structure
         """
-        print(self.root)
+        print(str(self.root))
         self.__pretty_print__(self.root, depth=1, skip_unvisited=skip_unvisited)
+
+    def copy(self) -> 'BeliefTree':
+        bt = BeliefTree(0, self.root.belief_states)
+        bt.root = copy(self.root)
+        for node_id, node in self.nodes.items():
+            if node is not None:
+                bt.nodes[node_id] = copy(node)
+            else:
+                bt.nodes[node_id] = None
+        return bt

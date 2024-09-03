@@ -15,9 +15,15 @@ from config import config
 
 class Agent(abc.ABC):
 
+    def __init__(self):
+        self.beliefs = None
+
     @abstractmethod
     def act(self, state, history: History) -> Action:
         pass
+
+    def get_history_data(self, state:State, history:History)->dict:
+        return { }
 
     def update(self, state, reward: float, last_action: Action, rock_observation, history: History) -> Tuple[List[str], List[str]]:
         return [], [], None
@@ -106,25 +112,36 @@ class Agent(abc.ABC):
             return 1 - sample_prob_with_distance, sample_prob_with_distance
 
     def get_bu_rock_probs(self, rock_sample_loc:tuple[int,int], rock_prob:dict, observation: SampleObservation, state):
-        if observation == SampleObservation.GOOD_ROCK:
+        # aviod division by zero and numerical errors
+        if rock_prob[SampleObservation.GOOD_ROCK] >= 0.99999:
+            bad_rock_prob, good_rock_prob = 0, 1
+
+        elif rock_prob[SampleObservation.BAD_ROCK] >= 0.99999:
+            bad_rock_prob, good_rock_prob = 1, 0
+
+        elif observation == SampleObservation.GOOD_ROCK:
             likelihood = self.calc_good_sample_prob(state, rock_sample_loc, SampleObservation.GOOD_ROCK)
             likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
             likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
             posterior_good_rock_given_good_observation = likelihood_of_good_observation_from_a_good_rock / \
                                                          (
                                                                  likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
-            good_rock_prob = max([posterior_good_rock_given_good_observation, 0])
+            good_rock_prob = min([max([posterior_good_rock_given_good_observation, 0]), 1])
             bad_rock_prob = 1 - good_rock_prob
 
-        else:  # observation ==SampleObservation.BAD_ROCK
+        elif observation == SampleObservation.BAD_ROCK:
             likelihood = self.calc_good_sample_prob(state, rock_sample_loc, SampleObservation.BAD_ROCK)
             likelihood_of_bad_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
             likelihood_of_bad_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
             posterior_good_rock_given_bad_observation = likelihood_of_bad_observation_from_a_good_rock / \
                                                         (
                                                                 likelihood_of_bad_observation_from_a_bad_rock + likelihood_of_bad_observation_from_a_bad_rock)
-            good_rock_prob = max([posterior_good_rock_given_bad_observation, 0])
+            good_rock_prob = min([max([posterior_good_rock_given_bad_observation, 0]), 1])
             bad_rock_prob = 1 - good_rock_prob
+
+        else:
+            raise ValueError(f"WHAT?? {observation}")
+
         return bad_rock_prob, good_rock_prob
 
     def get_beliefs_as_db_repr(self, state:State, rock_probs:Dict) -> List[str]:

@@ -1,6 +1,5 @@
 
 general:
-  db_name: test
   game_to_run: robots_small
 
 games:
@@ -13,11 +12,11 @@ games:
     playing_agents:
       - pomcp
     environment:
-      sample_prob: 0.9
+      sample_prob: 1.5
       gas_fee: 0.1
       sample_gas_fee: 0.05
-      discount_reward: 1
-      information_cost: 10
+      discount_reward: 0.9
+      information_fee: 3
       grid_size: [ 8,8 ]
       rocks: [ [1,1], [2,2], [3,3],[4,4], [ 0,5 ], [ 1,5 ], [ 0,6 ], [ 6,0 ] ]
       rocks_reward: [ 15, 15, 15, 15, -15, -15, -15, 15 ]
@@ -35,9 +34,9 @@ games:
     playing_agents:
       - pomcp
     environment:
-      sample_prob: 0.9
-      gas_fee: 0.1
-      sample_gas_fee: 0.05
+      sample_prob: 1.5
+      gas_fee: 0
+      sample_gas_fee: 0
       discount_reward : 0.9
       information_cost: 10
       grid_size: [15,15]
@@ -59,10 +58,9 @@ agents:
     name: bbu
   pomcp:
     name: pomcp
-    simulation_time: 2
-    max_simulation_depth: 8
-    max_particles: 30
-    c: 50
-
-assets:
-
+    simulation_time:
+    simulation_iters: 2000
+    max_simulation_depth: 7
+    max_particles: 10
+    c: 4
+    action_selection_strategy: max # softmax or max

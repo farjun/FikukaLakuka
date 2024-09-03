@@ -1,5 +1,6 @@
 import random
 from enum import Enum
+from functools import lru_cache
 from itertools import product
 from typing import Tuple, Optional, Union, List, Dict
 
@@ -24,15 +25,20 @@ class SampleObservation(Enum):
     GOOD_ROCK: int = 1
 
 
-class RockTile(object):
-    loc: Tuple[int, int]
-    reward: float
-    picked: bool
+class RockTile:
 
-    def __init__(self, loc, reward, picked=False):
+
+    def __init__(self, loc, reward, picked=False, rock_number=None):
         self.loc = loc
         self.reward = reward
         self.picked = picked
+        self.rock_number=rock_number
+        self.rock_number: int = rock_number
+
+
+    @staticmethod
+    def from_rock_tile(other_rock_tile)->"RockTile":
+        return RockTile(loc=other_rock_tile.loc, reward=other_rock_tile.reward, picked=other_rock_tile.picked, rock_number=other_rock_tile.rock_number)
 
     def is_good(self):
         return self.reward > 0
@@ -44,8 +50,7 @@ class RockTile(object):
         return self.loc == other.loc
 
     def __copy__(self):
-        return RockTile(loc=self.loc, reward=self.reward, picked=self.picked)
-
+        return RockTile(loc=self.loc, reward=self.reward, picked=self.picked, rock_number=self.rock_number)
 
 class RobotActions(Enum):
     UP = "Up"
@@ -53,7 +58,8 @@ class RobotActions(Enum):
     LEFT = "Left"
     RIGHT = "Right"
     SAMPLE = "Sample"
-    NUM_OF_ACTIONS = "Num of Actions"
+    COLLECT_ROCK= "Collect Rock"
+    BUY_INFORMATION = "Buy Information"
 
 
 class OracleActions(Enum):
@@ -63,9 +69,11 @@ class OracleActions(Enum):
     NUM_OF_ACTIONS = 3
 
 
-class Action(BaseModel):
-    action_type: Union[RobotActions, OracleActions]
-    rock_sample_loc: Optional[Tuple[int, int]] = None
+class Action:
+
+    def __init__(self, action_type: Union[RobotActions, OracleActions],  rock_sample_loc: Optional[Tuple[int, int]] = None):
+        self.action_type = action_type
+        self.rock_sample_loc = rock_sample_loc
 
     @staticmethod
     def sample(rock_sample_loc=None):
@@ -78,7 +86,7 @@ class Action(BaseModel):
             return Action(action_type=action_type)
 
     @staticmethod
-    def all_actions(state=None):
+    def all_actions(state, history: list, include_buy_information=False):
         cur_agent_loc = state.agent_locations[state.agent_selection]
 
         all_actions = []
@@ -91,14 +99,23 @@ class Action(BaseModel):
         if cur_agent_loc[1] < state.grid_size[0] - 1:
             all_actions.append(Action(action_type=RobotActions.RIGHT))
 
+        buy_info_past_actions = [hist.rock_sample_loc for hist in history if isinstance(hist, Action) and hist.action_type == RobotActions.BUY_INFORMATION]
         for rock in state.rocks:
-            if state and not rock.picked:
+            if rock.loc == tuple(cur_agent_loc) and not rock.picked:
+                all_actions.append(Action(action_type=RobotActions.COLLECT_ROCK, rock_sample_loc=rock.loc))
+
+            if not rock.picked and rock.loc not in buy_info_past_actions:
                 all_actions.append(Action(action_type=RobotActions.SAMPLE, rock_sample_loc=rock.loc))
+                if include_buy_information:
+                    all_actions.append(Action(action_type=RobotActions.BUY_INFORMATION, rock_sample_loc=rock.loc))
 
         return all_actions
 
     def __str__(self):
         return f"Action: {self.action_type}, {self.rock_sample_loc}"
+
+    def db_str(self):
+        return f"{self.action_type}, {self.rock_sample_loc}"
 
     def ui_repr(self):
         return f"{self.action_type.value}{self.rock_sample_loc or ''}"
@@ -116,29 +133,29 @@ class Action(BaseModel):
         return self.action_type == other.action_type and self.rock_sample_loc == other.rock_sample_loc
 
 
-class State(object):
-    cur_step: int
-    grid_size: Tuple[int, int]
-    sample_prob: float
-    agents: List[object]  # Agents
-    agent_locations: List[Tuple[int, int]]
-    agent_selection: int
-    rocks: List[RockTile]
-    gas_fee: float
-    start_pt: Tuple[int, int]
-    end_pt: Tuple[int, int]
+class State:
+    ASSUMED_ROCK_REWARD = 15
 
-    def __init__(self, cur_step, grid_size, sample_prob,agents, agent_locations, agent_selection, rocks, gas_fee, start_pt, end_pt):
-        self.cur_step = cur_step
-        self.grid_size = grid_size
+    def __init__(self, cur_step, grid_size, sample_prob,agents, agent_locations, agent_selection, rocks: RockTile, gas_fee, sample_gas_fee, information_fee, start_pt, end_pt):
+        self.cur_step: int = cur_step
+        self.grid_size: Tuple[int, int] = grid_size
         self.sample_prob = sample_prob
         self.agents = agents
         self.agent_locations = agent_locations
         self.agent_selection = agent_selection
-        self.rocks = rocks
+        self.rocks: list[RockTile] = rocks
         self.gas_fee = gas_fee
+        self.sample_gas_fee = sample_gas_fee
+        self.information_fee = information_fee
         self.start_pt = start_pt
         self.end_pt = end_pt
+        self._rocks_map = None
+        self._rock_rewards = None
+
+    def rock_rewards(self):
+        if self._rock_rewards is None:
+            self._rock_rewards = np.array([r.reward for r in self.rocks])
+        return self._rock_rewards
 
     def dict(self):
         return {
@@ -150,13 +167,17 @@ class State(object):
             "agent_selection": self.agent_selection,
             "rocks": self.rocks,
             "gas_fee": self.gas_fee,
+            "sample_gas_fee": self.sample_gas_fee,
+            "information_fee": self.information_fee,
             "start_pt": self.start_pt,
             "end_pt": self.end_pt,
         }
 
     @property
     def rocks_map(self) -> Dict[Tuple[int, int], RockTile]:
-        return {r.loc: r for r in self.rocks}
+        if self._rocks_map is None:
+            self._rocks_map = {r.loc: r for r in self.rocks}
+        return self._rocks_map
 
     class Config:
         arbitrary_types_allowed = True
@@ -174,17 +195,25 @@ class State(object):
         res = hash(str(self))
         return res
 
-    def get_all_possible_belief_states(self) -> List["State"]:
+    def get_all_possible_belief_states(self, rock_probs: dict) -> List["State"]:
         possible_states = []
+        possible_states_probs = []
         items = [1, -1]
-        not_picked_rocks = [r for r in self.rocks if not r.picked]
-        for rock_beliefs in product(items, repeat=len(not_picked_rocks)):
+        rock_probs_array = np.asarray([list(rock_probs[r.loc].values()) for r in self.rocks], dtype=np.float64)
+        for rock_beliefs_to_change in product(items, repeat=len(self.rocks)):
             s_dict = self.dict()
-            s_dict["rocks"] = [RockTile(loc=r.loc, reward=rb*r.reward) for rb, r in zip(rock_beliefs,self.rocks)]
+            s_dict["rocks"] = [RockTile(loc=r.loc, reward=rb*State.ASSUMED_ROCK_REWARD, picked=r.picked, rock_number=r.rock_number) for rb, r in zip(rock_beliefs_to_change, self.rocks)]
+
             s = State(**s_dict)
             possible_states.append(s)
+            rock_beliefs_to_change = np.array(rock_beliefs_to_change)
+            probability_of_state = np.prod(np.where(rock_beliefs_to_change == -1, rock_probs_array[:, 0], rock_probs_array[:, 1]))
+            possible_states_probs.append(probability_of_state)
 
-        return possible_states
+        return possible_states, possible_states_probs
+
+    def get_states_probs_by_belief(self, belief_probs: Dict[tuple, Dict[SampleObservation, float]]):
+        return np.prod([belief_probs[rt.loc][SampleObservation.GOOD_ROCK if rt.reward > 0 else SampleObservation.BAD_ROCK] for rt in self.rocks])
 
     def num_of_possible_states(self) -> int:
         return 2 ** len([r for r in self.rocks if not r.picked])
@@ -200,8 +229,10 @@ class State(object):
             "agents": self.agents,
             "agent_locations": self.agent_locations.copy(),
             "agent_selection": self.agent_selection,
-            "rocks": self.rocks.copy(),
+            "rocks": [RockTile.from_rock_tile(r) for r in self.rocks],
             "gas_fee": self.gas_fee,
+            "sample_gas_fee": self.sample_gas_fee,
+            "information_fee": self.information_fee,
             "start_pt": self.start_pt,
             "end_pt": self.end_pt,
         })

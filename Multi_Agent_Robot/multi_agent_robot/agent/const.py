@@ -9,8 +9,6 @@ class ConstAgent(Agent):
 
     def __init__(self, config_params: dict):
         self.config_params = config_params
-        rocks = config.get_in_game_context("environment", "rocks")
-        self.action_space = AgentActionSpace(agent_type="robot", n_rocks=len(rocks))
         self.actions_iter = iter([RobotActions.DOWN] * 10)
 
     def act(self, state, history: History) -> Action:

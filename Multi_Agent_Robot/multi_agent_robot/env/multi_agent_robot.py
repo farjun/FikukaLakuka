@@ -1,20 +1,17 @@
 from time import sleep
+from typing import Tuple, List, Dict
 
-from pettingzoo import AECEnv
+import numpy as np
 from gymnasium import spaces
-from pydantic import BaseModel
+from pettingzoo import AECEnv
 
 from Multi_Agent_Robot.multi_agent_robot.agent.base import Agent
 from Multi_Agent_Robot.multi_agent_robot.data.api import DataApi
-from Multi_Agent_Robot.multi_agent_robot.env.agent_action_space import AgentActionSpace
-import numpy as np
-
 from Multi_Agent_Robot.multi_agent_robot.env.history import History
-from Multi_Agent_Robot.multi_agent_robot.env.types import RockTile, CellType, SampleObservation, RobotActions, Action, \
-    OracleActions, State
+from Multi_Agent_Robot.multi_agent_robot.env.types import RockTile, SampleObservation, RobotActions, Action, \
+    State
 from Multi_Agent_Robot.multi_agent_robot.ui.gui import RockGui
 from config import config
-from typing import Tuple, List, Dict
 
 
 class MultiAgentRobotEnv(AECEnv):
@@ -34,42 +31,16 @@ class MultiAgentRobotEnv(AECEnv):
         self.start_pt: List[int] = config.get_in_game_context("environment", "start")
         self.end_pt: List[int] = config.get_in_game_context("environment", "end")
         self.sample_prob: float = config.get_in_game_context("environment", "sample_prob")
-        self.gas_fee: float = config.get_in_game_context("environment", "gas_fee")
-        self.sample_gas_fee: float = config.get_in_game_context("environment", "sample_gas_fee")
-
         agent_selection: int = config.get_in_game_context("environment", "starting_agent")
 
         # Derive constants from the configurations
         self.agent_types: List[str] = ["oracle" if agent == "oracle" else "robot" for agent in self.agents]
-        self.n_rocks: int = len(self.rocks_arr)
         # Create a dictionary of rocks and their rewards and whether they have been collected or not
         self.rocks_arr = [RockTile(loc=loc, reward=reward) for loc, reward in
                           zip(self.rocks_arr, self.rocks_reward_arr)]
         self.rocks_map: Dict[Tuple[int, int], RockTile] = {tuple(rt.loc): rt for rt in self.rocks_arr}
 
         # Define the observation space as a dictionary of spaces for each agent, containing the board as seen by the agent and the agent's
-        # belief vector on the rocks in the environment
-        self.observation_spaces = self._convert_to_dict(
-            [
-                spaces.Dict(
-                    {
-                        "board_observation": spaces.Space(
-                            shape=(self.grid_size[0], self.grid_size[1]), dtype=np.int8
-                        ),
-                        "belief_vec": spaces.Box(
-                            low=0, high=1, shape=(self.n_rocks, 1), dtype=np.int8,
-                        ),
-                    }
-                )
-                for _ in range(self.num_agents)
-            ]
-        )
-        # Define the action space as a dictionary of spaces for each agent, containing the action space for the agent
-        self.action_spaces = self._convert_to_dict(
-            [
-                AgentActionSpace(agent_type, self.n_rocks) for agent_type in self.agent_types
-            ]
-        )
 
         # Define the board as a 2D array of zeros
         agent_locations = [self.start_pt.copy() for _ in range(self.num_agents)]
@@ -79,14 +50,16 @@ class MultiAgentRobotEnv(AECEnv):
         self.last_preformed_action = None
         # Set the current state
         self.state = State(
-            cur_step = 0,
+            cur_step=0,
             agent_selection=agent_selection,
             grid_size=self.grid_size,
             sample_prob=self.sample_prob,
             agents=self.agents,
             agent_locations=agent_locations,
             rocks=self.rocks_arr,
-            gas_fee=self.gas_fee,
+            gas_fee=config.get_in_game_context("environment", "gas_fee"),
+            sample_gas_fee=config.get_in_game_context("environment", "sample_gas_fee"),
+            information_fee=config.get_in_game_context("environment", "information_fee"),
             start_pt=self.start_pt,
             end_pt=self.end_pt
         )
@@ -94,11 +67,7 @@ class MultiAgentRobotEnv(AECEnv):
         self._gui = None
 
     @property
-    def collected_rocks(self):
-        return [rock.picked for rock in self.rocks_map.values()]
-
-    @property
-    def agent_selection(self)->int:
+    def agent_selection(self) -> int:
         return self.state.agent_selection
 
     def sample(self):
@@ -114,7 +83,6 @@ class MultiAgentRobotEnv(AECEnv):
         # Reset the board as a 2D array of zeros
         self.state.agent_locations = [self.start_pt.copy() for _ in range(self.num_agents)]
 
-
         # Reset the rocks
         for rock in self.rocks_arr:
             rock.picked = False
@@ -128,64 +96,76 @@ class MultiAgentRobotEnv(AECEnv):
             self._gui = RockGui(self.state)
         return self._gui
 
-    def transotion_state(self, state: State, action: Action)->tuple:
+    @staticmethod
+    def transotion_state(state: State, action: Action) -> tuple:
         observation, reward, done = SampleObservation.NO_OBS, 0, False
         if action.action_type == RobotActions.SAMPLE:
-            observation = self.sample_rock(self.agent_selection, action.rock_sample_loc)
-            reward -= self.sample_gas_fee
+            observation = MultiAgentRobotEnv.sample_rock(state, action.rock_sample_loc)
+            reward -= state.sample_gas_fee
+
+        elif action.action_type == RobotActions.BUY_INFORMATION:
+            observation = SampleObservation.GOOD_ROCK if state.rocks_map[
+                action.rock_sample_loc].is_good() else SampleObservation.BAD_ROCK
+            reward -= state.information_fee
+
+        elif action.action_type == RobotActions.COLLECT_ROCK:
+            agent_pos = state.agent_locations[state.agent_selection]
+            rock_reward, observation = MultiAgentRobotEnv.remove_rock(state, tuple(agent_pos))
+            reward += rock_reward
 
         else:  # Action is a movement action
-            reward -= self.gas_fee
+            reward -= state.gas_fee
             # Update location
             agent_pos = state.agent_locations[state.agent_selection]
             board_x, board_y = state.grid_size
-            new_agent_pos = self.move_robot(action, agent_pos, board_x, board_y)
+            new_agent_pos = MultiAgentRobotEnv.move_robot(action, agent_pos, board_x, board_y)
             state.agent_locations[state.agent_selection] = new_agent_pos
-            reward += self.remove_rock(state, tuple(new_agent_pos))
 
-
-        if state.agent_locations[self.state.agent_selection] == self.end_pt:
+        if state.agent_locations[state.agent_selection] == state.end_pt:
             done = True
             reward += 10
 
+        state.agent_selection = (state.agent_selection + 1) % len(state.agents)
+        state.cur_step += 1
         return observation, reward, done, state
 
-    def step(self, action: Action = None, skip_board_update=False)->tuple:
-        agent = self.agents[self.agent_selection]
-        action = agent.act(self.state.deep_copy(), self.history)
+    def step(self, action: Action) -> tuple:
         self.last_preformed_action = action
         observation, reward, done, self.state = self.transotion_state(self.state, action)
+        truncated = False
+        return observation, reward, done, truncated, self.state
 
-        # Update belief vector with respect to each agent
-        agent_beliefs, oracles_beliefs, oracle_action = agent.update(self.state, reward, action, observation, self.history)
-        self.history.update(
-            cur_agent = self.agent_selection,
+    def run_one_turn(self):
+        agent = self.agents[self.agent_selection]
+        action = agent.act(self.state.deep_copy(), self.history)
+        observation, reward, done, truncated, self.state = self.step(action)
+        self.render(mode="human")
+        oracle_action = agent.update(self.state, reward, action, observation, self.history)
+        history_data = agent.get_history_data(self.state, self.history)
+        self.history.add_step(
+            self.state,
             action=action,
             observation=observation,
             reward=reward,
-            players_pos=self.state.agent_locations,
-            agent_beliefs=agent_beliefs,
             oracle_action=oracle_action,
-            oracle_beliefs=oracles_beliefs,
-            state=self.state
+            **history_data,
         )
-
-        truncated = False
-        self.state.cur_step += 1
-        return observation, reward, done, truncated, self.state
+        return observation, reward, done, truncated, {}
 
     @staticmethod
-    def remove_rock(state, rock_pos):
+    def remove_rock(state, rock_pos)->tuple[int, SampleObservation]:
         reward = 0
+        observation = SampleObservation.NO_OBS
         if rock_pos in state.rocks_map.keys() and not state.rocks_map[rock_pos].picked:
             rock = state.rocks_map[rock_pos]
             rock.picked = True
             reward = rock.reward
+            observation = SampleObservation.GOOD_ROCK if rock.is_good() else SampleObservation.BAD_ROCK
 
-        return reward
+        return reward, observation
 
     @staticmethod
-    def move_robot(action, agent_pos:tuple, board_x, board_y):
+    def move_robot(action, agent_pos: tuple, board_x, board_y):
         agent_pos = list(agent_pos)
         if action.action_type == RobotActions.LEFT:
             agent_pos[1] = max([0, agent_pos[1] - 1])
@@ -207,16 +187,24 @@ class MultiAgentRobotEnv(AECEnv):
             print(msg)
 
     def observation_space(self, agent):
-        return self.observation_spaces[agent]
+        return spaces.Dict(
+            {
+                "board_observation": spaces.Space(
+                    shape=(self.grid_size[0], self.grid_size[1]), dtype=np.int8
+                ),
+                "belief_vec": spaces.Box(
+                    low=0, high=1, shape=(len(self.rocks_arr), 1), dtype=np.int8,
+                ),
+            }
+        )
 
-    def action_space(self, agent):
-        return self.action_spaces[agent]
-
-    def sample_rock(self, agent, rock_loc: Tuple[int, int]) -> SampleObservation:
-        agent_location = self.state.agent_locations[agent]
-        dist = np.linalg.norm(np.array(agent_location) - np.array(rock_loc), ord=1)
-        p = self.calc_sample_prob(dist)
-        rock = self.rocks_map[rock_loc]
+    @staticmethod
+    def sample_rock(state: State, rock_loc: Tuple[int, int]) -> SampleObservation:
+        agent_location = state.agent_locations[state.agent_selection]
+        distance_to_rock = np.linalg.norm(np.array(agent_location) - np.array(rock_loc), ord=1)
+        distance_to_rock /= 3
+        p = 1 / 2 * (1 + np.exp(-distance_to_rock * np.log(2) / state.sample_prob))
+        rock = state.rocks_map[rock_loc]
         if rock.is_good():
             good_rock_prob, bad_rock_prob = p, 1 - p
         else:
@@ -225,22 +213,10 @@ class MultiAgentRobotEnv(AECEnv):
                                   p=[bad_rock_prob, good_rock_prob])
         return SampleObservation(sample[0])
 
-    def calc_sample_prob(self, distance_to_rock):
-        distance_to_rock /= 3
-        return 1 / 2 * (1 + np.exp(-distance_to_rock * np.log(2) / self.sample_prob))
-
-    def _int_to_name(self, ind):
-        return self.agents[ind]
-
-    def _name_to_int(self, name):
-        return self.agents.index(name)
-
-    def _convert_to_dict(self, list_of_list):
-        return dict(zip(self.agents, list_of_list))
 
 
-
-def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=False, schema_name="env", skip_reset=False, max_steps=None):
+def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=False, schema_name="env",
+                    skip_reset=False, max_steps=None):
     data_api = DataApi(force_recreate=force_recreate_tables, schema=schema_name)
     if not skip_reset:
         env.reset()
@@ -248,27 +224,15 @@ def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=F
     total_reward = 0
 
     for i in range(max_steps or env.MAX_STEPS):
-        done = False
         for _ in env.agent_iter():
-
-            observation, reward, done, truncated, info = env.step()
+            observation, reward, done, truncated, info = env.run_one_turn()
             total_reward += reward
-            if verbose:
-                env.render(mode="human")
+            data_api.write_history_step(env.history.get_last_step_db_obj())
 
-            if done:
-                data_api.write_history(env.history)
-
-                if verbose:
-                    print("done @ step {}".format(i))
-
-                break
             if use_sleep:
                 sleep(0.05)
-        if done:
-            break
 
-    if verbose:
-        print("cumulative reward", total_reward)
+            if done:
+                break
 
     return total_reward
