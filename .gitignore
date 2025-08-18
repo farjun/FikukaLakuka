@@ -1,3 +1,4 @@
 /.idea/
 /data/runs
+/data/saved_runs
 */__pycache__/*

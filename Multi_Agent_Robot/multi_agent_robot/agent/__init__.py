@@ -7,6 +7,7 @@ from config import config
 
 
 def init_agent(agent_id: str):
+    model_name = config.get_in_agent_context(agent_id, "model_name")
     return {
         "random": RandomAgent,
         "const": ConstAgent,
@@ -14,4 +15,4 @@ def init_agent(agent_id: str):
         "bbu": BayesianBeliefAgent,
         "pomcp": POMCPAgent,
 
-    }[agent_id](config.get_in_agent_context(agent_id))
+    }[model_name](config.get_in_agent_context(agent_id))

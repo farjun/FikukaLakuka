@@ -5,8 +5,6 @@ from itertools import product
 from typing import Tuple, Optional, Union, List, Dict
 
 import numpy as np
-from pydantic import BaseModel
-
 from config import config
 
 
@@ -53,20 +51,20 @@ class RockTile:
         return RockTile(loc=self.loc, reward=self.reward, picked=self.picked, rock_number=self.rock_number)
 
 class RobotActions(Enum):
-    UP = "Up"
-    DOWN = "Down"
-    LEFT = "Left"
-    RIGHT = "Right"
-    SAMPLE = "Sample"
-    COLLECT_ROCK= "Collect Rock"
-    BUY_INFORMATION = "Buy Information"
+    UP = 0
+    DOWN = 1
+    LEFT = 2
+    RIGHT = 3
+    SAMPLE = 4
+    COLLECT_ROCK= 5
+    BUY_INFORMATION = 6
 
 
 class OracleActions(Enum):
     DONT_SEND_DATA = 0
     SEND_GOOD_ROCK = 1
     SEND_BAD_ROCK = 2
-    NUM_OF_ACTIONS = 3
+    ORACLE_DID_NOT_RUN = 3
 
 
 class Action:
@@ -157,6 +155,12 @@ class State:
             self._rock_rewards = np.array([r.reward for r in self.rocks])
         return self._rock_rewards
 
+    @property
+    def rocks_map(self) -> Dict[Tuple[int, int], RockTile]:
+        if self._rocks_map is None:
+            self._rocks_map = {r.loc: r for r in self.rocks}
+        return self._rocks_map
+
     def dict(self):
         return {
             "cur_step": self.cur_step,
@@ -173,11 +177,7 @@ class State:
             "end_pt": self.end_pt,
         }
 
-    @property
-    def rocks_map(self) -> Dict[Tuple[int, int], RockTile]:
-        if self._rocks_map is None:
-            self._rocks_map = {r.loc: r for r in self.rocks}
-        return self._rocks_map
+
 
     class Config:
         arbitrary_types_allowed = True
@@ -195,22 +195,32 @@ class State:
         res = hash(str(self))
         return res
 
-    def get_all_possible_belief_states(self, rock_probs: dict) -> List["State"]:
+    @staticmethod
+    @lru_cache()
+    def get_all_possible_rock_beliefs() -> list[list[RockTile]]:
+        items = [1, -1]
+        all_possible_rock_beliefs = []
+        rocks = config.get_rocks(cast=RockTile)
+        for rock_beliefs_to_change in product(items, repeat=len(rocks)):
+            possible_rock_belief = [RockTile(loc=tuple(r.loc), reward=rb*State.ASSUMED_ROCK_REWARD, picked=False, rock_number=r.rock_number) for
+              rb, r in zip(rock_beliefs_to_change, rocks)]
+            all_possible_rock_beliefs.append(possible_rock_belief)
+
+        return  all_possible_rock_beliefs
+
+    def get_all_possible_belief_states(self) -> tuple[List["State"], List[float]]:
         possible_states = []
         possible_states_probs = []
-        items = [1, -1]
-        rock_probs_array = np.asarray([list(rock_probs[r.loc].values()) for r in self.rocks], dtype=np.float64)
-        for rock_beliefs_to_change in product(items, repeat=len(self.rocks)):
+        for rock_belief in State.get_all_possible_rock_beliefs():
             s_dict = self.dict()
-            s_dict["rocks"] = [RockTile(loc=r.loc, reward=rb*State.ASSUMED_ROCK_REWARD, picked=r.picked, rock_number=r.rock_number) for rb, r in zip(rock_beliefs_to_change, self.rocks)]
-
+            for r,rb in zip(self.rocks, rock_belief):
+                rb.picked = r.picked
+            s_dict["rocks"] = rock_belief
             s = State(**s_dict)
             possible_states.append(s)
-            rock_beliefs_to_change = np.array(rock_beliefs_to_change)
-            probability_of_state = np.prod(np.where(rock_beliefs_to_change == -1, rock_probs_array[:, 0], rock_probs_array[:, 1]))
-            possible_states_probs.append(probability_of_state)
-
         return possible_states, possible_states_probs
+
+
 
     def get_states_probs_by_belief(self, belief_probs: Dict[tuple, Dict[SampleObservation, float]]):
         return np.prod([belief_probs[rt.loc][SampleObservation.GOOD_ROCK if rt.reward > 0 else SampleObservation.BAD_ROCK] for rt in self.rocks])
@@ -236,5 +246,14 @@ class State:
             "start_pt": self.start_pt,
             "end_pt": self.end_pt,
         })
+
+    def calc_sample_probs(self, rock_loc: Tuple[int, int]) -> (float, float):
+        location = self.current_agent_location()
+        # sensor quality
+        # distance to rock
+        distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
+        # measurement error function
+        sample_prob_with_distance = 1 / 2 * (1 + np.exp(-(distance_to_rock + 1 / 3) * np.log(2) / self.sample_prob))
+        return sample_prob_with_distance, 1 - sample_prob_with_distance
 
 

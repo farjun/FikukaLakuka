@@ -25,6 +25,9 @@ class Agent(abc.ABC):
     def get_history_data(self, state:State, history:History)->dict:
         return { }
 
+    def get_render_data(self)->dict:
+        return { "beliefs" : None }
+
     def update(self, state, reward: float, last_action: Action, rock_observation, history: History) -> Tuple[List[str], List[str]]:
         return [], [], None
 
@@ -88,55 +91,42 @@ class Agent(abc.ABC):
 
         return None
 
-    def get_rock_distances(self, state) -> List[int]:
+    def get_rock_distances(self, state:State) -> List[int]:
         dists = list()
         for rock in state.rocks:
-            agent_location = state.cur_agent_location()
+            agent_location = state.current_agent_location()
             dists.append(abs(agent_location[0] - rock.loc[0]) + abs(agent_location[1] - rock.loc[1]))
         return dists
 
     def get_rock_beliefs(self):
         raise NotImplementedError
 
-    @staticmethod
-    def calc_good_sample_prob(state, rock_loc: Tuple[int, int], observation: SampleObservation) -> (float, float):
-        location = state.current_agent_location()
-        # sensor quality
-        # distance to rock
-        distance_to_rock = np.linalg.norm(np.array(location) - np.array(rock_loc))
-        # measurement error function
-        sample_prob_with_distance = 1 / 2 * (1 + np.exp(-(distance_to_rock / 3) * np.log(2) / state.sample_prob))
-        if observation == SampleObservation.GOOD_ROCK:
-            return sample_prob_with_distance, 1 - sample_prob_with_distance
-        if observation == SampleObservation.BAD_ROCK:
-            return 1 - sample_prob_with_distance, sample_prob_with_distance
-
     def get_bu_rock_probs(self, rock_sample_loc:tuple[int,int], rock_prob:dict, observation: SampleObservation, state):
         # aviod division by zero and numerical errors
-        if rock_prob[SampleObservation.GOOD_ROCK] >= 0.99999:
+        if rock_prob[SampleObservation.GOOD_ROCK] >= 0.9999 or rock_prob[SampleObservation.BAD_ROCK] <= 0.0001:
             bad_rock_prob, good_rock_prob = 0, 1
 
-        elif rock_prob[SampleObservation.BAD_ROCK] >= 0.99999:
+        elif rock_prob[SampleObservation.BAD_ROCK] >= 0.9999 or rock_prob[SampleObservation.GOOD_ROCK] <= 0.0001:
             bad_rock_prob, good_rock_prob = 1, 0
 
         elif observation == SampleObservation.GOOD_ROCK:
-            likelihood = self.calc_good_sample_prob(state, rock_sample_loc, SampleObservation.GOOD_ROCK)
-            likelihood_of_good_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
-            likelihood_of_good_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
+            sample_is_right_prob, sample_is_wrong_prob = state.calc_sample_probs(rock_sample_loc)
+            likelihood_of_good_observation_from_a_good_rock = sample_is_right_prob * rock_prob[SampleObservation.GOOD_ROCK]
+            likelihood_of_good_observation_from_a_bad_rock = sample_is_wrong_prob * rock_prob[SampleObservation.BAD_ROCK]
             posterior_good_rock_given_good_observation = likelihood_of_good_observation_from_a_good_rock / \
                                                          (
                                                                  likelihood_of_good_observation_from_a_good_rock + likelihood_of_good_observation_from_a_bad_rock)
-            good_rock_prob = min([max([posterior_good_rock_given_good_observation, 0]), 1])
+            good_rock_prob = posterior_good_rock_given_good_observation
             bad_rock_prob = 1 - good_rock_prob
 
         elif observation == SampleObservation.BAD_ROCK:
-            likelihood = self.calc_good_sample_prob(state, rock_sample_loc, SampleObservation.BAD_ROCK)
-            likelihood_of_bad_observation_from_a_good_rock = likelihood[0] * rock_prob[SampleObservation.GOOD_ROCK]
-            likelihood_of_bad_observation_from_a_bad_rock = likelihood[1] * rock_prob[SampleObservation.BAD_ROCK]
+            sample_is_right_prob, sample_is_wrong_prob = state.calc_sample_probs(rock_sample_loc)
+            likelihood_of_bad_observation_from_a_good_rock = sample_is_wrong_prob * rock_prob[SampleObservation.GOOD_ROCK]
+            likelihood_of_bad_observation_from_a_bad_rock = sample_is_right_prob * rock_prob[SampleObservation.BAD_ROCK]
             posterior_good_rock_given_bad_observation = likelihood_of_bad_observation_from_a_good_rock / \
                                                         (
-                                                                likelihood_of_bad_observation_from_a_bad_rock + likelihood_of_bad_observation_from_a_bad_rock)
-            good_rock_prob = min([max([posterior_good_rock_given_bad_observation, 0]), 1])
+                                                                likelihood_of_bad_observation_from_a_good_rock + likelihood_of_bad_observation_from_a_bad_rock)
+            good_rock_prob = posterior_good_rock_given_bad_observation
             bad_rock_prob = 1 - good_rock_prob
 
         else:

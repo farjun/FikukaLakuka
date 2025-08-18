@@ -6,7 +6,7 @@ from collections import Counter
 from functools import wraps
 
 
-np.random.seed(0)
+
 MAX = np.inf
 
 def timeit(comment=None):
@@ -45,8 +45,8 @@ def elem_distribution(arr):
     return {k: v / _sum for k, v in cnt.items()}
 
 
-def rand_choice(candidates, p=None):
-    return np.random.choice(candidates, p=p)
+def rand_choice(candidates, p=None, size=None):
+    return np.random.choice(candidates, p=p, size=size)
 
 ######################################
 # High performance utility functions #

@@ -11,11 +11,12 @@ from .helper import rand_choice, round
 
 
 class Node(object):
-    def __init__(self, nid, name, h, parent=None, value=0, visit_count=0):
+    def __init__(self, nid, name, h, tree_ptr: "BeliefTree", parent=None, value=0, visit_count=0):
         self.history = h
-        self.value = value
         self.visit_count = visit_count
         self.id = nid
+        self.value = value
+        self.tree_ptr = tree_ptr
         self.name = name
         self.parent = parent
         self.children: Union[List[ActionNode], List[BeliefNode]] = []
@@ -39,14 +40,13 @@ class BeliefNode(Node):
     It also holds the received observation after which the belief is updated accordingly
     """
 
-    def __init__(self, nid, name, h, obs_index, parent=None, value=0, visit_count=0, budget=float('inf')):
-        Node.__init__(self, nid, name, h, parent, value, visit_count)
+    def __init__(self, nid, name, h, obs_index, tree_ptr: "BeliefTree", parent=None, value=0, visit_count=0, budget=float('inf'), particles=None):
+        Node.__init__(self, nid, name, h, tree_ptr, parent, value, visit_count)
         self.observation = obs_index
         self.budget = budget
-        self.belief_states: List[State] = []
+        self.belief_states: list[State] = particles
         self.action_map = {}
         self.belief_states_probs: np.array = []
-        self.belief_states_rock_mask: np.ndarray = None
 
 
     def add_child(self, node):
@@ -56,45 +56,48 @@ class BeliefNode(Node):
     def get_child(self, action: Action):
         return self.action_map.get(action)
 
-    def sample_state(self, rock_probs) -> State:
-        if len(self.belief_states) != len(self.belief_states_probs):
-            self.update_particles_beliefs(rock_probs)
-        return rand_choice(self.belief_states, p=self.belief_states_probs).deep_copy()
+    def get_q_values(self, mean=False, max_q=False):
+        if not self.children:
+            return 0
 
-    def add_particle(self, particle: List[State]):
-        if type(particle) is list:
-            self.belief_states.extend(particle)
-            new_rock_mask = []
-            for p in particle:
-                new_rock_mask.append([r.reward for r in p.rocks])
+        if mean:
+            return sum(child.value for child in self.children) / len(self.children)
 
-            new_rock_mask = np.asarray(new_rock_mask)
-        else:
-            new_rock_mask = np.asarray([[r.reward for r in particle.rocks]])
-            self.belief_states.append(particle)
+        if max_q:
+            return max(child.value for child in self.children)
 
-        new_rock_mask = (new_rock_mask / (State.ASSUMED_ROCK_REWARD * 2)) + 0.5
-        if self.belief_states_rock_mask is None:
-            self.belief_states_rock_mask = new_rock_mask
-        else:
-            self.belief_states_rock_mask = np.concatenate((self.belief_states_rock_mask, new_rock_mask))
+    def sample_state(self, rock_probs, size=None) -> State:
+        belief_states_probs = self.get_belief_states_probs(rock_probs, self.belief_states)
+        return rand_choice(np.asarray(self.belief_states), p=belief_states_probs, size=size).deep_copy()
+
+    @staticmethod
+    def calc_belief_states_rock_mask(belief_states: list[State]):
+        new_rock_mask = []
+        for p in belief_states:
+            new_rock_mask.append([r.reward for r in p.rocks])
+        new_rock_mask = np.asarray(new_rock_mask)
+        return (new_rock_mask / (State.ASSUMED_ROCK_REWARD * 2)) + 0.5
 
 
-    def update_particles_beliefs(self, rock_probs: dict[tuple, dict[SampleObservation, float]]):
+    def update_belief_states_probs(self, rock_probs: dict[tuple, dict[SampleObservation, float]]):
         """
         Updates the belief distribution given the observation and action
         """
-        rock_probs_arr = np.asarray([[rock_probs[r.loc][SampleObservation.GOOD_ROCK], rock_probs[r.loc][SampleObservation.BAD_ROCK]] for r in self.belief_states[0].rocks])
-        bad_rock_mask =  1 - self.belief_states_rock_mask
-        good_rocks_res = mult_on_axis(self.belief_states_rock_mask, rock_probs_arr.T[0], axis=1)
+        self.belief_states_probs = self.get_belief_states_probs(rock_probs, self.belief_states)
+
+
+    def get_belief_states_probs(self, rock_probs: dict[tuple, dict[SampleObservation, float]], belief_states: list[State]):
+        rock_probs_arr = np.asarray(
+            [[rock_probs[r.loc][SampleObservation.GOOD_ROCK], rock_probs[r.loc][SampleObservation.BAD_ROCK]] for r in belief_states[0].rocks])
+        bad_rock_mask = 1 - self.tree_ptr.BELIEF_STATES_ROCK_MASK
+        good_rocks_res = mult_on_axis(self.tree_ptr.BELIEF_STATES_ROCK_MASK, rock_probs_arr.T[0], axis=1)
         bad_rocks_res = mult_on_axis(bad_rock_mask, rock_probs_arr.T[1], axis=1)
         states_probs = np.prod(good_rocks_res + bad_rocks_res, axis=1)
-
         prob_sum = np.sum(states_probs)
         if prob_sum == 0:
             states_probs = np.ones(len(states_probs))
             prob_sum = len(states_probs)
-        self.belief_states_probs = states_probs / prob_sum
+        return states_probs / prob_sum
 
     def __repr__(self):
         return 'BeliefNode({}, visits = {})'.format(self.observation, self.visit_count)
@@ -114,19 +117,30 @@ class ActionNode(Node):
     represents the node associated with an POMDP action
     """
 
-    def __init__(self, nid, name, h, action_index:Action, cost, parent=None, value=0, visit_count=0):
-        Node.__init__(self, nid, name, h, parent, value, visit_count)
+    def __init__(self, nid, name, h, action_index:Action, cost, tree_ptr: "BeliefTree", parent=None, value=0, visit_count=0):
+        Node.__init__(self, nid, name, h, tree_ptr, parent, value, visit_count)
         self.direct_reward = 0.0
-        self.mean_reward = 0.0
+        self.mean_action_reward = 0.0
         self.mean_cost = 0.0
+        self.mean_future_reward = 0.0
+        self.max_future_reward = -np.inf
         self.cost = cost
         self.action = action_index
         self.obs_map = {}
 
-    def update_stats(self, cost, reward):
+    def update_stats(self, cost, cur_reward, future_reward):
         self.mean_cost = (self.mean_cost * self.visit_count + cost) / (self.visit_count + 1)
-        self.mean_reward = (self.mean_reward * self.visit_count + reward) / (self.visit_count + 1)
-        self.direct_reward = reward
+        self.mean_action_reward = (self.mean_action_reward * self.visit_count + cur_reward) / (self.visit_count + 1)
+        self.mean_future_reward = (self.mean_future_reward * self.visit_count + future_reward) / (self.visit_count + 1)
+        self.max_future_reward = max(self.max_future_reward, future_reward)
+        self.direct_reward = cur_reward
+        self.visit_count += 1
+        self.value = self.mean_action_reward + self.mean_future_reward + 0.2*self.max_future_reward
+
+
+    @property
+    def grandchildren(self):
+        return [child.children for child in self.children if child.children]
 
     def add_child(self, node):
         self.children.append(node)
@@ -135,13 +149,19 @@ class ActionNode(Node):
     def get_child(self, observation: SampleObservation):
         return self.obs_map.get(observation, None)
 
-    def __repr__(self):
-        return 'ActionNode({}, visits = {}, value = {}, reward={})'.format(self.action, self.visit_count, round(self.value, 6), self.direct_reward)
+    def __repr__(self)->str:
+        return self.action.action_type.name
+
+    def to_ui_name(self)->str:
+        action_name = str(self.action.action_type.name)
+        if self.action.rock_sample_loc is not None:
+            action_name += f" {self.action.rock_sample_loc}"
+        return action_name
 
     def __copy__(self):
-        an = ActionNode(self.id, self.name, self.history, self.action, self.cost, self.parent, self.value,
+        an = ActionNode(self.id, self.name, self.history, self.action, self.cost, self.tree_ptr, self.parent, self.value,
                         self.visit_count)
-        an.mean_reward = self.mean_reward
+        an.mean_action_reward = self.mean_action_reward
         an.mean_cost = self.mean_cost
         an.obs_map = self.obs_map.copy()
         return an
@@ -159,6 +179,9 @@ class BeliefTree:
         self.counter = 0
         self.nodes = {}
         self.root = self.add(history=[], name='root', particle=root_particles, budget=total_budget)
+        # setup attribute for all nodes
+        self.BELIEF_STATES = root_particles
+        self.BELIEF_STATES_ROCK_MASK = BeliefNode.calc_belief_states_rock_mask(root_particles)
 
     def to_db_str(self, max_depth=4)->str:
         res_str = str(self.root) + "\n"
@@ -204,12 +227,9 @@ class BeliefTree:
 
         # instantiate node
         if action is not None:
-            node = ActionNode(self.counter, name, history, parent=parent, action_index=action, cost=cost)
+            node = ActionNode(self.counter, name, history, tree_ptr=self, parent=parent, action_index=action, cost=cost)
         else:
-            node = BeliefNode(self.counter, name, history, parent=parent, obs_index=observation, budget=budget)
-
-        if particle is not None:
-            node.add_particle(particle)
+            node = BeliefNode(self.counter, name, history, tree_ptr=self, parent=parent, obs_index=observation, budget=budget, particles = particle)
 
         # add the node to belief tree
         self.nodes[node.id] = node

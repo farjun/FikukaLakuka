@@ -29,6 +29,7 @@ class GuiTile(Tile):
 
 class GridGui(object):
     _assets = {}
+    _sidebar_width = 400
 
     def __init__(self, x_size, y_size, tile_size):
         self.x_size = x_size
@@ -40,7 +41,7 @@ class GridGui(object):
             self.assets[k] = pygame.transform.scale(pygame.image.load(v), [tile_size] * 2)
 
         self.w = self.tile_size * self.x_size
-        self.h = (self.tile_size * self.y_size) + 50  # size of the taskbar
+        self.h = (self.tile_size * self.y_size) + self._sidebar_width
 
         pygame.init()
         self.surface = pygame.display.set_mode((self.w, self.h))
@@ -65,12 +66,26 @@ class GridGui(object):
     def render(self, state: Dict, msg):
         raise NotImplementedError()
 
-    def task_bar(self, msg):
+    def task_bar(self, msg, beliefs = None):
         assert msg is not None
+        padding = 10
+        y_offset =  self.h - self._sidebar_width
         txt = self.action_font.render(msg, 2, pygame.Color("black"))
-        rect = pygame.Rect((0, self.h - 50 + 5), (self.w, 40))  # 205 for tiger
+        rect = pygame.Rect((0, self.h - self._sidebar_width + 5), (self.w,  self.h ))
         pygame.draw.rect(self.surface, pygame.Color("white"), rect, 0)
-        self.surface.blit(txt, (self.tile_size // 2, self.h - 50 + 10))  # 210
+        self.surface.blit(txt, (padding, y_offset + padding))  # 210
+        y_offset += txt.get_height() + padding
+
+        title = "Action Q values"
+        text_surface = self.action_font.render(title, True, pygame.Color("black"))
+        self.surface.blit(text_surface, (padding, y_offset))
+        y_offset += text_surface.get_height() + padding
+
+        for belief in beliefs:
+            belief_text = f"{belief.to_ui_name()}: {belief.value:.2f}"
+            text_surface = self.action_font.render(belief_text, True, pygame.Color("black"))
+            self.surface.blit(text_surface, (padding, y_offset))
+            y_offset += text_surface.get_height() + padding
 
     @staticmethod
     def _dispatch():
@@ -95,6 +110,7 @@ class RockGui(GridGui):
         pygame.display.update()
         GridGui._dispatch()
 
+
     def draw(self, state):
         last_state = self.history[-1]
         cur_pos = self._as_ui_pt(state, state.current_agent_location())
@@ -116,9 +132,28 @@ class RockGui(GridGui):
             self.board[self._as_ui_pt(state, state.agent_locations[agent_id])].draw(
                 img=self.assets["_ROBOT" + str(agent_id)])
 
-    def render(self, state: State, msg:str):
+    def draw_beliefs_sidebar(self, beliefs: list):
+        """Draw the beliefs in a sidebar beside the board."""
+        sidebar_x = self.tile_size * self.x_size  # Start of sidebar area
+        sidebar_y = 0
+        padding = 5
+        font = pygame.font.SysFont("monospace", 14)
+
+        # Clear the sidebar area
+        sidebar_rect = pygame.Rect((sidebar_x, sidebar_y), (self._sidebar_width, self.h))
+        pygame.draw.rect(self.surface, pygame.Color("white"), sidebar_rect)
+
+        # Display beliefs
+        y_offset = padding
+        for belief in beliefs:
+            belief_text = f"{belief.name}: {belief.value:.2f}"
+            text_surface = font.render(belief_text, True, pygame.Color("black"))
+            self.surface.blit(text_surface, (sidebar_x + padding, y_offset))
+            y_offset += text_surface.get_height() + padding
+
+    def render(self, state: State, msg:str, beliefs: list = None):
         self.draw(state)
-        self.task_bar(msg)
+        self.task_bar(msg, beliefs=beliefs)
         pygame.display.update()
         GridGui._dispatch()
 

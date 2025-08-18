@@ -15,30 +15,31 @@ from config import config
 
 
 class MultiAgentRobotEnv(AECEnv):
-    MAX_STEPS = 200
+    MAX_STEPS = 100
     metadata = {
         "name": "multi_agent_robot_v0",
     }
+    REAL_ROCK_PROBS_MAP = None
 
     def __init__(self, agents: List[Agent]):
         super().__init__()
         # Get all current game configurations
         self.history = History()
-        self.agents: List = agents
+        self.agents: list[Agent] = agents
         self.grid_size: Tuple[int, int] = config.get_in_game_context("environment", "grid_size")
         self.rocks_arr: List[Tuple[int, int]] = [tuple(x) for x in config.get_in_game_context("environment", "rocks")]
         self.rocks_reward_arr: List[int] = config.get_in_game_context("environment", "rocks_reward")
         self.start_pt: List[int] = config.get_in_game_context("environment", "start")
         self.end_pt: List[int] = config.get_in_game_context("environment", "end")
         self.sample_prob: float = config.get_in_game_context("environment", "sample_prob")
-        agent_selection: int = config.get_in_game_context("environment", "starting_agent")
-
         # Derive constants from the configurations
         self.agent_types: List[str] = ["oracle" if agent == "oracle" else "robot" for agent in self.agents]
         # Create a dictionary of rocks and their rewards and whether they have been collected or not
         self.rocks_arr = [RockTile(loc=loc, reward=reward) for loc, reward in
                           zip(self.rocks_arr, self.rocks_reward_arr)]
         self.rocks_map: Dict[Tuple[int, int], RockTile] = {tuple(rt.loc): rt for rt in self.rocks_arr}
+        MultiAgentRobotEnv.REAL_ROCK_PROBS_MAP = self.rocks_map
+
 
         # Define the observation space as a dictionary of spaces for each agent, containing the board as seen by the agent and the agent's
 
@@ -51,7 +52,7 @@ class MultiAgentRobotEnv(AECEnv):
         # Set the current state
         self.state = State(
             cur_step=0,
-            agent_selection=agent_selection,
+            agent_selection=config.get_in_game_context("environment", "starting_agent"),
             grid_size=self.grid_size,
             sample_prob=self.sample_prob,
             agents=self.agents,
@@ -63,6 +64,8 @@ class MultiAgentRobotEnv(AECEnv):
             start_pt=self.start_pt,
             end_pt=self.end_pt
         )
+        self.history.add_step(self.state.deep_copy())
+
         # Set the GUI
         self._gui = None
 
@@ -104,8 +107,7 @@ class MultiAgentRobotEnv(AECEnv):
             reward -= state.sample_gas_fee
 
         elif action.action_type == RobotActions.BUY_INFORMATION:
-            observation = SampleObservation.GOOD_ROCK if state.rocks_map[
-                action.rock_sample_loc].is_good() else SampleObservation.BAD_ROCK
+            observation = SampleObservation.GOOD_ROCK if MultiAgentRobotEnv.REAL_ROCK_PROBS_MAP[action.rock_sample_loc].reward > 0 else SampleObservation.BAD_ROCK
             reward -= state.information_fee
 
         elif action.action_type == RobotActions.COLLECT_ROCK:
@@ -139,11 +141,11 @@ class MultiAgentRobotEnv(AECEnv):
         agent = self.agents[self.agent_selection]
         action = agent.act(self.state.deep_copy(), self.history)
         observation, reward, done, truncated, self.state = self.step(action)
-        self.render(mode="human")
+        self.render(**agent.get_render_data())
         oracle_action = agent.update(self.state, reward, action, observation, self.history)
         history_data = agent.get_history_data(self.state, self.history)
         self.history.add_step(
-            self.state,
+            self.state.deep_copy(),
             action=action,
             observation=observation,
             reward=reward,
@@ -177,12 +179,12 @@ class MultiAgentRobotEnv(AECEnv):
             agent_pos[0] = min([board_y - 1, agent_pos[0] + 1])
         return agent_pos
 
-    def render(self, mode='not', close=False):
+    def render(self, mode='not', close=False, **kwargs):
         if close:
             return
         msg = f"step={self.state.cur_step} {repr(self.last_preformed_action.ui_repr())}"
         if mode == "human":
-            self.gui.render(self.state, msg=msg)
+            self.gui.render(self.state, msg=msg, **kwargs)
         else:
             print(msg)
 
@@ -200,39 +202,32 @@ class MultiAgentRobotEnv(AECEnv):
 
     @staticmethod
     def sample_rock(state: State, rock_loc: Tuple[int, int]) -> SampleObservation:
-        agent_location = state.agent_locations[state.agent_selection]
-        distance_to_rock = np.linalg.norm(np.array(agent_location) - np.array(rock_loc), ord=1)
-        distance_to_rock /= 3
-        p = 1 / 2 * (1 + np.exp(-distance_to_rock * np.log(2) / state.sample_prob))
-        rock = state.rocks_map[rock_loc]
-        if rock.is_good():
-            good_rock_prob, bad_rock_prob = p, 1 - p
-        else:
-            good_rock_prob, bad_rock_prob = 1 - p, p
-        sample = np.random.choice([SampleObservation.BAD_ROCK.value, SampleObservation.GOOD_ROCK.value], 1,
-                                  p=[bad_rock_prob, good_rock_prob])
+        good_sample_prob, bad_sample_prob = state.calc_sample_probs(rock_loc)
+        p = [good_sample_prob, bad_sample_prob] if state.rocks_map[rock_loc].is_good() else [bad_sample_prob, good_sample_prob]
+        sample = np.random.choice([SampleObservation.GOOD_ROCK.value, SampleObservation.BAD_ROCK.value], 1, p=p)
         return SampleObservation(sample[0])
 
 
 
 def run_one_episode(env, verbose=False, use_sleep=False, force_recreate_tables=False, schema_name="env",
                     skip_reset=False, max_steps=None):
-    data_api = DataApi(force_recreate=force_recreate_tables, schema=schema_name)
+    data_api = DataApi(force_recreate=force_recreate_tables)
     if not skip_reset:
         env.reset()
 
     total_reward = 0
-
+    done = False
     for i in range(max_steps or env.MAX_STEPS):
-        for _ in env.agent_iter():
-            observation, reward, done, truncated, info = env.run_one_turn()
-            total_reward += reward
-            data_api.write_history_step(env.history.get_last_step_db_obj())
+        if done:
+            break
+        observation, reward, done, truncated, info = env.run_one_turn()
+        total_reward += reward
+        data_api.write_history_step(env.history.get_last_step_db_obj())
+        env.render()
+        if use_sleep:
+            sleep(0.05)
 
-            if use_sleep:
-                sleep(0.05)
-
-            if done:
-                break
+        if done:
+            break
 
     return total_reward
