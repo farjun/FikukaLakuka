@@ -3,6 +3,7 @@ from Multi_Agent_Robot.multi_agent_robot.agent.baysian_update import BayesianBel
 from Multi_Agent_Robot.multi_agent_robot.agent.const import ConstAgent
 from Multi_Agent_Robot.multi_agent_robot.agent.random import RandomAgent
 from Multi_Agent_Robot.multi_agent_robot.agent.pomcp import POMCPAgent
+from Multi_Agent_Robot.multi_agent_robot.agent.pomcp.vec_pomcp_agent import VecPOMCPAgent
 from config import config
 
 
@@ -14,5 +15,6 @@ def init_agent(agent_id: str):
         "algo": AlgoAgent,
         "bbu": BayesianBeliefAgent,
         "pomcp": POMCPAgent,
+        "vec_pomcp": VecPOMCPAgent,
 
     }[model_name](config.get_in_agent_context(agent_id))

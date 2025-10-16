@@ -1,51 +1,174 @@
 
 general:
-  game_to_run: robots_small
+#  games_to_run: [very_small_map_short_horizon, robots_small_short_horizon , robots_small_far_horizon, robots_medium_short_horizon, robots_medium_far_horizon]
+  override_games: false
+  games_to_run: [robots_info_buying_test]
 
 games:
-  robots_small:
-    seed: 101
+  very_small_map_short_horizon:
+    seeds: [42, 43 ,44, 45, 46]
     gym_params:
       id: RobotsEnv-v0
       entry_point: fikuka_lakuka.gym.envs:RobotsEnv
-      max_episode_steps: 100
+      max_episode_steps: 20
     playing_agents:
-      - pomcp
-    environment:
-      sample_prob: 1.5
-      gas_fee: 0.1
-      sample_gas_fee: 0.05
-      discount_reward: 0.9
-      information_fee: 3
-      grid_size: [ 8,8 ]
-      rocks: [ [1,1], [2,2], [3,3],[4,4], [ 0,5 ], [ 1,5 ], [ 0,6 ], [ 6,0 ] ]
-      rocks_reward: [ 15, 15, 15, 15, -15, -15, -15, 15 ]
-      end_pt_reward: 3
-      start: [ 0,0 ]
-      end: [ 7,7 ]
-      starting_agent: 0
+      - pomcp_short_horizon
+    environment: very_small_map
 
-  robots:
-    seed: 101
+  robots_small_short_horizon:
+    seeds: [42, 43, 44]
     gym_params:
       id: RobotsEnv-v0
       entry_point: fikuka_lakuka.gym.envs:RobotsEnv
-      max_episode_steps: 100
+      max_episode_steps: 30
     playing_agents:
-      - pomcp
-    environment:
-      sample_prob: 1.5
-      gas_fee: 0
-      sample_gas_fee: 0
-      discount_reward : 0.9
-      information_cost: 10
-      grid_size: [15,15]
-      rocks: [[0,14], [1,14], [0,13], [12,0]]
-      rocks_reward: [-15, -15, -15, 15]
-      end_pt_reward: 3
-      start: [0,0]
-      end: [14,14]
-      starting_agent: 0
+      - pomcp_short_horizon
+    environment: small_map
+
+  robots_small_far_horizon:
+    seeds: [ 42, 43 ,44 ]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 40
+    playing_agents:
+      - pomcp_far_horizon
+    environment: small_map
+
+  robots_medium_short_horizon:
+    seeds: [ 42, 43 ,44 ]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 40
+    playing_agents:
+      - pomcp_short_horizon
+    environment: medium_map
+
+  robots_medium_far_horizon:
+    seeds: [42, 43 ,44]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 40
+    playing_agents:
+      - pomcp_far_horizon
+    environment: medium_map
+
+  robots_big_short_horizon:
+    seeds: [42, 43 ,44]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 60
+    playing_agents:
+      - pomcp_short_horizon
+    environment: large_map
+
+  robots_big_far_horizon:
+    seeds: [42, 43 ,44]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 60
+    playing_agents:
+      - pomcp_far_horizon
+    environment: large_map
+
+  # NEW: Configuration designed to encourage Oracle to send information
+  robots_info_buying_test:
+    seeds: [42, 43, 44, 45, 46]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 40
+    playing_agents:
+      - pomcp_oracle_encouraged
+    environment: oracle_encouraged_map
+
+  # NEW: Test configuration for vectorized POMCP agent
+  vec_pomcp_test:
+    seeds: [42, 43, 44]
+    gym_params:
+      id: RobotsEnv-v0
+      entry_point: fikuka_lakuka.gym.envs:RobotsEnv
+      max_episode_steps: 30
+    playing_agents:
+      - vec_pomcp_fast
+    environment: small_map
+
+environments:
+
+  very_small_map:
+    sample_prob: 0.65
+    gas_fee: 1
+    sample_gas_fee: 0.5
+    discount_reward: 0.9
+    information_fee: 2
+    grid_size: [ 3,3 ]
+    rocks: [ [ 2, 0 ], [ 0, 2 ] ]
+    rocks_reward: [ 10, -10 ]
+    end_pt_reward: 5
+    start: [ 0,0 ]
+    end: [ 2,2 ]
+    starting_agent: 0
+
+  small_map:
+    sample_prob: 0.65
+    gas_fee: 1
+    sample_gas_fee: 0.5
+    discount_reward: 0.8
+    information_fee: 4
+    grid_size: [ 4,5 ]
+    rocks: [ [ 1, 0 ], [ 0,1 ], [ 3, 3 ], [ 3, 4 ] ]
+    rocks_reward: [ 15, -15, -15, 15 ]
+    end_pt_reward: 5
+    start: [ 0,0 ]
+    end: [ 4,3 ]
+    starting_agent: 0
+
+  medium_map:
+    sample_prob: 0.65
+    gas_fee: 1
+    sample_gas_fee: 1
+    discount_reward: 0.9
+    information_fee: 5
+    grid_size: [ 5,7 ]
+    rocks: [ [ 1,1 ], [ 2,2 ], [ 3,3 ],[ 4,4 ], [ 0,5 ], [ 1,5 ], [ 0,2 ], [ 4,0 ] ]
+    rocks_reward: [ -15, 15, -15, 15, -15, -15, -15, 15 ]
+    end_pt_reward: 3
+    start: [ 0,0 ]
+    end: [ 6,4 ]
+    starting_agent: 0
+
+  large_map:
+    sample_prob: 0.65
+    gas_fee: 1
+    sample_gas_fee: 1
+    discount_reward: 0.9
+    information_fee: 2
+    grid_size: [ 10,10 ]
+    rocks: [ [ 1,1 ], [ 2,2 ], [ 3,3 ],[ 4,4 ], [ 3,5 ], [ 3,0 ], [ 1,5 ], [ 9,6 ], [ 5,7 ],  [ 9,4 ], [ 3,9 ], [ 1,8 ], [ 4,6 ], [ 7,7 ] , [8,7] ]
+    rocks_reward: [ 15, 15, 15, 15, -15, -15, -15, -15, -15, 15, -15, -15, 15, -15, 15 ]
+    end_pt_reward: 5
+    start: [ 0,0 ]
+    end: [ 9,9 ]
+    starting_agent: 0
+
+  # NEW: Environment designed to encourage Oracle to send information
+  oracle_encouraged_map:
+    sample_prob: 0.3  # Lower sample probability makes sampling less reliable
+    gas_fee: 1         # Keep movement cost reasonable
+    sample_gas_fee: 1  # Keep sampling cost reasonable
+    discount_reward: 0.95  # Higher discount makes future rewards more valuable
+    information_fee: 1     # Low information cost for simulated agents
+    grid_size: [ 5,7 ]
+    rocks: [ [ 1,1 ], [ 2,2 ], [ 3,3 ],[ 4,4 ], [ 0,5 ], [ 1,5 ], [ 0,2 ], [ 4,0 ] ]
+    rocks_reward: [ -25, 25, -25, 25, -25, -25, -25, 25 ]  # Higher rock rewards make info more valuable
+    end_pt_reward: 5
+    start: [ 0,0 ]
+    end: [ 6,4 ]
+    starting_agent: 0
 
 agents:
   PPOtest:
@@ -56,11 +179,76 @@ agents:
     name: algo
   bbu:
     name: bbu
-  pomcp:
-    name: pomcp
+
+  pomcp_very_far_horizon:
+    model_name: pomcp
+    simulation_time:
+    simulation_iters: 2500
+    max_simulation_depth: 15
+    max_particles: 256
+    c: 25
+    enable_oracle: true
+    oracle_max_simulation_depth: 15
+    action_selection_strategy: max # softmax or max
+
+
+  pomcp_far_horizon:
+    model_name: pomcp
     simulation_time:
     simulation_iters: 2000
-    max_simulation_depth: 7
-    max_particles: 10
-    c: 4
+    max_simulation_depth: 10
+    max_particles: 256
+    c: 25
+    enable_oracle: true
+    oracle_max_simulation_depth: 15
     action_selection_strategy: max # softmax or max
+
+  pomcp_short_horizon:
+    model_name: pomcp
+    simulation_time:
+    simulation_iters: 600
+    max_simulation_depth: 6
+    max_particles: 256
+    c: 25
+    enable_oracle: true
+    oracle_max_simulation_depth: 6
+    action_selection_strategy: max
+
+  # NEW: Agent configuration designed to encourage Oracle to send information
+  pomcp_oracle_encouraged:
+    model_name: pomcp
+    simulation_time:
+    simulation_iters: 800
+    max_simulation_depth: 8
+    max_particles: 256
+    c: 25
+    enable_oracle: true
+    oracle_max_simulation_depth: 8
+    action_selection_strategy: max
+
+  # NEW: Vectorized POMCP agent for improved performance
+  vec_pomcp_fast:
+    model_name: vec_pomcp
+    simulation_time:
+    simulation_iters: 1000
+    max_simulation_depth: 8
+    max_particles: 256
+    c: 25
+    enable_oracle: true
+    oracle_max_simulation_depth: 8
+    action_selection_strategy: max
+    utility_fn: ucb1
+
+  vec_pomcp_deep:
+    model_name: vec_pomcp
+    simulation_time:
+    simulation_iters: 1500
+    max_simulation_depth: 10
+    max_particles: 256
+    c: 25
+    enable_oracle: true
+    oracle_max_simulation_depth: 10
+    action_selection_strategy: max
+    utility_fn: ucb1
+
+

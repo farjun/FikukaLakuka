@@ -141,7 +141,7 @@ class POMCPAgent(OracleAgent):
         if depth > self.max_simulation_depth or budget <= 0:
             return 0
 
-        all_actions = Action.all_actions(state, cur_history)
+        all_actions = Action.all_actions(state, cur_history, include_buy_information=self.in_a_simulation)
         random_action: Action = rand_choice(all_actions)
         sj, oj, r, cost = self.simulate_action(state, random_action)
         cur_history += [random_action]

@@ -9,15 +9,26 @@ from config import config
 
 def parse_agent_rock_beliefs_list(beliefs_str: str):
     """Parse the `agent_rock_beliefs` string into a dictionary of (tuple) coordinates to float probabilities."""
-    if beliefs_str == "[]" or not beliefs_str:
+    if beliefs_str == "[]" or not beliefs_str or beliefs_str is None:
         return []  # Handle empty list case
 
     # Convert the string representation to a list of strings
     try:
         beliefs_list = ast.literal_eval(beliefs_str)
-        beliefs_list = [float(entry.split(":")[1])for entry in beliefs_list]
-        return beliefs_list
-    except (SyntaxError, ValueError) as e:
+        if beliefs_list is None:
+            return []
+        
+        parsed_beliefs = []
+        for entry in beliefs_list:
+            if entry is not None and ":" in str(entry):
+                try:
+                    parsed_beliefs.append(float(entry.split(":")[1]))
+                except (ValueError, IndexError):
+                    parsed_beliefs.append(0.0)
+            else:
+                parsed_beliefs.append(0.0)
+        return parsed_beliefs
+    except (SyntaxError, ValueError, TypeError) as e:
         print(f"Error parsing agent_rock_beliefs: {e}")
         return []
 
@@ -38,8 +49,8 @@ def parse_oracle_beliefs(beliefs_str: str)->list[list[float]]:
 
 def enrich_real_rock_probs(game_name:str):
     rocks, rocks_reward = config.get_rocks(game_name=game_name)
-    # Transform the rocks_reward (-15 -> 0, 15 -> 1)
-    real_rock_probs = [1 if reward == 15 else 0 for reward in rocks_reward]
+    # Transform the rocks_reward (positive -> 1, negative -> 0)
+    real_rock_probs = [1 if reward > 0 else 0 for reward in rocks_reward]
     return rocks,  real_rock_probs
 
 
@@ -96,7 +107,16 @@ def parse_values_ordered(input_str,  order = None)->list[float]:
     values_dict = {(int(x), int(y)): float(value) for x, y, value in matches}
 
     # Arrange values based on the order in `rocks`
-    ordered_values = [values_dict[tuple(rock)] for rock in order]
+    ordered_values = []
+    
+    for rock in order:
+        try:
+            ordered_values.append(values_dict[tuple(rock)])
+        except KeyError:
+            # If rock coordinate is not found, use 0.0 as default
+            # This is expected behavior when oracle doesn't have info about all rocks
+            ordered_values.append(0.0)
+    
     return ordered_values
 
 

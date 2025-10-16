@@ -6,6 +6,7 @@ import pandas as pd
 
 from Multi_Agent_Robot.multi_agent_robot.data.process.utils import enrich_real_rock_probs, split_by_repeating_steps
 import plotly.graph_objects as go
+from .oracle_analysis import OracleAnalyzer
 
 class PlotsGenerator:
 
@@ -25,10 +26,25 @@ class PlotsGenerator:
         game_name = game_data['game_name']
         simulations_data = game_data['simulations_data']
 
+        # Add existing plots
         self.add_figure(self.plot_reward(game_name, env_df, simulations_data))
         self.add_figure(self.plot_agent_rock_belief_loss(game_name, env_df, simulations_data))
         self.add_figure(self.plot_prob_of_agent_belief_in_oracle_beliefs(game_name, env_df, simulations_data))
         self.add_figure(self.plot_simulation_rewards_per_step(game_name, env_df, simulations_data))
+        
+        # Add comprehensive Oracle analysis plots
+        try:
+            oracle_analyzer = OracleAnalyzer(env_df, simulations_data)
+            oracle_figures = oracle_analyzer.get_all_figures()
+            for fig in oracle_figures:
+                self.add_figure(fig)
+            
+            # Add Oracle insights summary
+            insights = oracle_analyzer.get_decision_insights()
+            self.add_figure(self.create_oracle_insights_summary(insights))
+            
+        except Exception as e:
+            print(f"Warning: Could not generate Oracle analysis plots: {e}")
 
         return self.figures
 
@@ -199,4 +215,41 @@ class PlotsGenerator:
             ]
         )
 
+        return fig
+    
+    def create_oracle_insights_summary(self, insights: dict) -> Figure:
+        """Create a summary table showing Oracle decision insights."""
+        # Create summary data for the table
+        summary_data = [
+            {'Metric': 'Total Oracle Decisions', 'Value': str(insights['total_decisions'])},
+            {'Metric': 'Information Sent', 'Value': f"{insights['information_sent_count']} ({insights['information_sent_percentage']:.1f}%)"},
+            {'Metric': 'No Information Sent', 'Value': str(insights['no_information_count'])},
+            {'Metric': 'Average Benefit When Sending', 'Value': f"{insights['average_benefit_when_sending']:.3f}"},
+            {'Metric': 'Average Confidence', 'Value': f"{insights['average_confidence']:.3f}"},
+            {'Metric': 'Most Common Decision Reason', 'Value': insights['most_common_reason']}
+        ]
+        
+        # Create table figure
+        fig = go.Figure(data=[go.Table(
+            header=dict(
+                values=['Metric', 'Value'],
+                fill_color='lightblue',
+                align='left',
+                font=dict(size=14, color='black')
+            ),
+            cells=dict(
+                values=[[row['Metric'] for row in summary_data], 
+                       [row['Value'] for row in summary_data]],
+                fill_color='white',
+                align='left',
+                font=dict(size=12)
+            )
+        )])
+        
+        fig.update_layout(
+            title="Oracle Decision-Making Insights Summary",
+            height=300,
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
+        
         return fig

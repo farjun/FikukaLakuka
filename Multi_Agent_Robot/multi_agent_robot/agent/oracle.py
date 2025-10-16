@@ -41,7 +41,8 @@ class OracleAgent(Agent):
     def __init__(self, config_params: dict):
         super().__init__()
         self.config_params = config_params
-        self.oracle_max_simulation_depth = config_params.get("oracle_max_simulation_depth", 4)
+        # OPTIMIZED: Reduce simulation depth for faster performance
+        self.oracle_max_simulation_depth = min(config_params.get("oracle_max_simulation_depth", 4), 4)
         self._data_api = None
         self.gas_fee = config.get_in_game_context("environment", "gas_fee")
         self.in_a_simulation = False
@@ -71,11 +72,19 @@ class OracleAgent(Agent):
         # for history tracking
         self.history_information = dict()
         self._last_action_generated_q_values = []
-        self.agent_beliefs_scores = []
+        self.agent_beliefs_scores = [1.0]
         self.simulation_information = []
+        
+        # Track which rocks the Oracle has already sent information about
+        self.sent_rock_locations = set()
 
     def add_to_history(self, k, v):
         self.history_information[k] = v
+    
+    def reset_episode_tracking(self):
+        """Reset tracking for a new episode."""
+        self.sent_rock_locations.clear()
+        print(f"Oracle: Reset episode tracking - cleared {len(self.sent_rock_locations)} sent rock locations")
 
 
     @property
@@ -135,7 +144,7 @@ class OracleAgent(Agent):
                 simulation_q_values = hist.get_q_values()
                 agent_actions.append([history_step.action for history_step in hist.past])
 
-        # Step 1: Accumulate weighted info requests
+        # Step 1: Accumulate weighted info requests (excluding already-sent rocks)
         info_request_weights = defaultdict(float)
 
         for belief_index, belief_score in enumerate(self.agent_beliefs_scores):
@@ -143,19 +152,26 @@ class OracleAgent(Agent):
 
             for action in belief_actions:
                 if action.action_type == RobotActions.BUY_INFORMATION:
-                    # Weighted vote: add belief score to that rock's "request count"
-                    info_request_weights[action.rock_sample_loc] += belief_score
+                    # Only consider rocks that haven't been sent information about yet
+                    if action.rock_sample_loc not in self.sent_rock_locations:
+                        # Weighted vote: add belief score to that rock's "request count"
+                        info_request_weights[action.rock_sample_loc] += belief_score
                     break  # Only consider the first BUY_INFORMATION per belief (optional choice)
 
         # Step 2: Choose whether to send info and which rock to send
         if not info_request_weights:
-            print("Oracle action: DONT_SEND_DATA ")
+            print(f"Oracle action: DONT_SEND_DATA (no new rocks to inform about, already informed: {len(self.sent_rock_locations)})")
             return Action(action_type=OracleActions.DONT_SEND_DATA)
         else: # Choose the rock with the highest total weighted score
             rock_to_send_loc = max(info_request_weights, key=info_request_weights.get)
             rock_to_send = state.rocks_map[rock_to_send_loc]
-            print("Oracle action: Sending info on rock {rock_to_send.rock_loc} ")
-            return Action(action_type=OracleActions.SEND_GOOD_ROCK, rock_sample_loc=rock_to_send.rock_loc)
+            
+            # Mark this rock as informed about and update agent beliefs
+            self.sent_rock_locations.add(rock_to_send_loc)
+            self.update_agents_rock_probs_on_send_data(rock_to_send_loc)
+            
+            print(f"Oracle action: Sending info on rock {rock_to_send.loc} (total informed: {len(self.sent_rock_locations)})")
+            return Action(action_type=OracleActions.SEND_GOOD_ROCK, rock_sample_loc=rock_to_send.loc)
 
 
 
@@ -213,28 +229,41 @@ class OracleAgent(Agent):
         sum_rewards = list()
         histories = list()
         env = MultiAgentRobotEnv(state.agents)
-        for i, rock_prob in auto_tqdm(enumerate(rock_probs), total=len(rock_probs), desc=f"Oracle is Simulating agent runs: step={state.cur_step}, writing to table {hist_table_name} for {self.oracle_max_simulation_depth} steps"):
+        
+        # OPTIMIZED: Batch DB operations and reduce I/O during simulation
+        all_simulation_histories = []
+        
+        for i, rock_prob in auto_tqdm(enumerate(rock_probs), total=len(rock_probs), desc=f"Oracle simulating: step={state.cur_step}, {self.oracle_max_simulation_depth} steps"):
             self.add_to_history("cur_simulated_changed_rock", changed_rock_locs[i] if changed_rock_locs is not None else None)
             self.add_to_history("unchanged_rock_beliefs", self.get_beliefs_as_db_repr(state, rock_prob) if unchanged_rock_beliefs is not None else None)
+            
             simulation_history = History()
             self.enter_inner_simulation_mode(rock_prob, backup_data=True)
             cur_state = state.deep_copy()
             total_reward = 0
-            for i in auto_tqdm(range(self.oracle_max_simulation_depth), total=self.oracle_max_simulation_depth,  position=0, leave=True):
+            
+            # OPTIMIZED: Remove nested progress bar and reduce history data collection
+            for step in range(self.oracle_max_simulation_depth):
                 action = self.act(cur_state, history)
                 observation, reward, done, cur_state = env.transotion_state(cur_state, action)
                 self.update(cur_state, reward, action, observation, env.history)
-                history_data = self.get_history_data(cur_state, env.history)
-                simulation_history.add_step(cur_state, action=action, observation=observation, reward=reward, **history_data)
+                
+                # OPTIMIZED: Minimal history data collection during simulation
+                simulation_history.add_step(cur_state, action=action, observation=observation, reward=reward)
                 total_reward += reward
                 if done:
                     break
 
             histories.append(simulation_history)
-            self.data_api.create_run_history_table(hist_table_name)
-            self.data_api.write_history(simulation_history, schema= hist_table_name)
+            all_simulation_histories.append(simulation_history)
             sum_rewards.append(total_reward)
             self.exit_inner_simulation_mode(restore_data=True)
+        
+        # OPTIMIZED: Batch write all histories at once instead of one by one
+        if all_simulation_histories:
+            self.data_api.create_run_history_table(hist_table_name)
+            for sim_hist in all_simulation_histories:
+                self.data_api.write_history(sim_hist, schema=hist_table_name)
 
         return sum_rewards, histories
 

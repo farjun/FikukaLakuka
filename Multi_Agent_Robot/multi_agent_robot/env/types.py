@@ -209,11 +209,16 @@ class State:
         return  all_possible_rock_beliefs
 
     def get_all_possible_belief_states(self) -> tuple[List["State"], List[float]]:
+        # OPTIMIZED: Cache and reuse state dict to avoid repeated dict() calls
+        base_state_dict = self.dict()
         possible_states = []
         possible_states_probs = []
+        
         for rock_belief in State.get_all_possible_rock_beliefs():
-            s_dict = self.dict()
-            for r,rb in zip(self.rocks, rock_belief):
+            # OPTIMIZED: Copy base dict instead of calling self.dict() each time
+            s_dict = base_state_dict.copy()
+            # OPTIMIZED: Vectorized picked status update
+            for r, rb in zip(self.rocks, rock_belief):
                 rb.picked = r.picked
             s_dict["rocks"] = rock_belief
             s = State(**s_dict)

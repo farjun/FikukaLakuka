@@ -1,4 +1,4 @@
 /.idea/
-/data/runs
-/data/saved_runs
-*/__pycache__/*
+**/data/runs
+**/__pycache__/**
+/Multi_Agent_Robot/multi_agent_robot/data/saved runs/

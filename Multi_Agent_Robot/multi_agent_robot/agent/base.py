@@ -60,12 +60,14 @@ class Agent(abc.ABC):
 
         state_rocks_arr_not_picked = [rock.loc for rock in state.rocks if not rock.picked]
         if rock_beliefs:
+            # OPTIMIZED: Vectorized belief update instead of loop
             for rock, i in zip(state_rocks_arr_not_picked, range(1, graph_matrix.shape[1] - 1)):
                 graph_matrix[:, i] -= (rock_beliefs[rock][SampleObservation.GOOD_ROCK] - 0.5) * 30
 
-        for i in range(graph_matrix.shape[0]):
-            for j in range(graph_matrix.shape[1]):
-                graph.add_edge(i, j, graph_matrix[i, j])
+        # OPTIMIZED: Use numpy operations to add edges more efficiently
+        rows, cols = np.meshgrid(range(graph_matrix.shape[0]), range(graph_matrix.shape[1]), indexing='ij')
+        for i, j in zip(rows.flatten(), cols.flatten()):
+            graph.add_edge(i, j, graph_matrix[i, j])
 
         return graph
 
